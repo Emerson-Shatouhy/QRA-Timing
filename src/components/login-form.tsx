@@ -25,13 +25,14 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form>
+          <form action={login}>
             <div className="grid gap-6">
               <div className="grid gap-6">
                 <div className="grid gap-3">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="m@example.com"
                     required
@@ -47,9 +48,9 @@ export function LoginForm({
                       Forgot your password?
                     </a>
                   </div>
-                  <Input id="password" type="password" required />
+                  <Input id="password" name="password" type="password" required />
                 </div>
-                <Button type="submit" className="w-full" onClick={login}>
+                <Button type="submit" className="w-full">
                   Login
                 </Button>
               </div>
