@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "../../utils/supabase/client";
 import { Race, RaceStatus } from "../../utils/types/race";
 import { Team } from "../../utils/types/team";
+import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
 import {
   Table,
   TableBody,
@@ -47,7 +48,8 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
           getBoatsByRace(race.id),
           getAllTeams()
         ]);
-        setEntries(entriesData || []);
+        const entriesWithLevels = assignLevelsToBoats(entriesData || []);
+        setEntries(entriesWithLevels);
         setTeams(teamsData || []);
       } catch (error) {
         console.error('Error fetching race data:', error);
@@ -81,13 +83,14 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
     };
   }, [race.id]);
 
-  const getTeamName = (entry: any): string => {
-    return entry.teams?.team_name || 'Unknown Team';
+  const getTeamNameWithLevel = (entry: any): string => {
+    const teamName = entry.teams?.team_name || 'Unknown Team';
+    return entry.level ? `${teamName} ${entry.level}` : teamName;
   };
 
   const getAvailableTeams = () => {
-    const entryTeamIds = entries.map(entry => entry.team_id.toString());
-    return teams.filter(team => !entryTeamIds.includes(team.id.toString()));
+    // All teams are always available for selection to allow multiple entries (A, B, C levels)
+    return teams;
   };
 
   const handleAddEntry = async () => {
@@ -111,7 +114,8 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
       const newEntry = await addBoatToRace(teamId, race.id, bow);
       if (newEntry) {
         const updatedEntries = await getBoatsByRace(race.id);
-        setEntries(updatedEntries || []);
+        const updatedEntriesWithLevels = assignLevelsToBoats(updatedEntries || []);
+        setEntries(updatedEntriesWithLevels);
         setSelectedTeamId('');
         setBowNumber('');
         setShowAddForm(false);
@@ -226,7 +230,7 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
                 <TableCell className="font-medium">
                   {entry.bow_number || 'N/A'}
                 </TableCell>
-                <TableCell>{getTeamName(entry)}</TableCell>
+                <TableCell>{getTeamNameWithLevel(entry)}</TableCell>
                 <TableCell>
                   <span className={`px-2 py-1 rounded text-xs ${entry.boat_status === 'registered' ? 'bg-blue-100 text-blue-800' :
                     entry.boat_status === 'ready' ? 'bg-yellow-100 text-yellow-800' :

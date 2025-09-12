@@ -7,6 +7,7 @@ import { createClient } from "../../utils/supabase/client";
 import { Boat } from "../../utils/types/boat";
 import { Team } from "../../utils/types/team";
 import { Race } from "../../utils/types/race";
+import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
 import {
   Table,
   TableBody,
@@ -31,7 +32,8 @@ export default function EntriesTable() {
           getAllTeams(),
           getAllRaces()
         ]);
-        setEntries(entriesData || []);
+        const entriesWithLevels = assignLevelsToBoats(entriesData || []);
+        setEntries(entriesWithLevels);
         setTeams(teamsData || []);
         setRaces(racesData || []);
       } catch (error) {
@@ -90,9 +92,10 @@ export default function EntriesTable() {
     };
   }, []);
 
-  const getTeamName = (teamId: bigint): string => {
+  const getTeamNameWithLevel = (teamId: bigint, level: string | null): string => {
     const team = teams.find(t => t.id === teamId);
-    return team?.team_name || 'Unknown Team';
+    const teamName = team?.team_name || 'Unknown Team';
+    return level ? `${teamName} ${level}` : teamName;
   };
 
   const getRaceName = (raceId: bigint | null): string => {
@@ -129,7 +132,7 @@ export default function EntriesTable() {
               <TableCell className="font-medium">
                 {entry.bow_number || 'N/A'}
               </TableCell>
-              <TableCell>{getTeamName(entry.team_id)}</TableCell>
+              <TableCell>{getTeamNameWithLevel(entry.team_id, entry.level)}</TableCell>
               <TableCell>{getRaceName(entry.race_id)}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded text-xs ${

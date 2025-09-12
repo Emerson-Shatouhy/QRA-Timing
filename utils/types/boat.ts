@@ -14,4 +14,5 @@ export interface Boat {
    race_id: bigint | null;
    bow_number: number | null;
    boat_status: BoatStatus | null;
+  level: string | null;
 }
