@@ -13,7 +13,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export default function RacesTable() {
+interface RacesTableProps {
+  refreshTrigger?: number;
+}
+
+export default function RacesTable({ refreshTrigger }: RacesTableProps) {
   const [races, setRaces] = useState<Race[]>([]);
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -47,7 +51,7 @@ export default function RacesTable() {
     };
 
     fetchRaces();
-  }, []);
+  }, [refreshTrigger]);
 
   if (loading) {
     return <p>Loading races...</p>;

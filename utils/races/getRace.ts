@@ -109,3 +109,41 @@ export async function updateRaceStatus(raceId: bigint, status: RaceStatus): Prom
    return true;
 }
 
+/**
+ * Creates a new race
+ * @param raceData - The race data to create
+ * @returns The created race or null if creation failed
+ */
+export async function createRace(raceData: {
+   race_name: string;
+   race_type: RaceType;
+   event_date: Date;
+   scheduled_start: Date;
+   distance_meters?: number;
+   max_entries?: number;
+   weather_conditions?: string;
+}): Promise<Race | null> {
+   const supabase = createClient();
+   const { data: race, error } = await supabase
+      .from('races')
+      .insert([{
+         race_name: raceData.race_name,
+         race_type: raceData.race_type,
+         event_date: raceData.event_date.toISOString(),
+         scheduled_start: raceData.scheduled_start.toISOString(),
+         distance_meters: raceData.distance_meters,
+         max_entries: raceData.max_entries,
+         weather_conditions: raceData.weather_conditions,
+         race_status: RaceStatus.SCHEDULED
+      }])
+      .select()
+      .single();
+
+   if (error) {
+      console.error('Error creating race:', error);
+      return null;
+   }
+
+   return race;
+}
+

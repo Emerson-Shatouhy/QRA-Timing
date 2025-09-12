@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BoatStatus } from "../../../../../utils/types/boat";
 import { createClient } from "../../../../../utils/supabase/client";
+import { assignLevelsToBoats } from "../../../../../utils/boats/assignLevels";
 
 interface BoatEntry {
   id: bigint;
   bow_number: number;
   boat_status: string | null;
+  level?: string | null;
   teams: {
     id: bigint;
     team_name: string;
@@ -74,7 +76,8 @@ export default function RaceTimingPage() {
         }
         
         const boatEntries = await getBoatsByRace(BigInt(raceId));
-        setBoats(boatEntries || []);
+        const boatEntriesWithLevels = assignLevelsToBoats(boatEntries || []);
+        setBoats(boatEntriesWithLevels || []);
 
         // Load existing race results to restore timing events
         if (foundRace.actual_start) {
@@ -86,11 +89,15 @@ export default function RaceTimingPage() {
               if (result.entries && result.start_time) {
                 const startTime = new Date(result.start_time);
                 
+                // Find the boat to get the level
+                const boat = (boatEntries || []).find(b => b.id === result.entries.id);
+                const teamNameWithLevel = boat ? getTeamNameWithLevel(boat) : (result.entries.teams?.team_name || 'Unknown Team');
+
                 // Add start event
                 restoredEvents.push({
                   id: `start-${result.entries.bow_number}-${startTime.getTime()}`,
                   bowNumber: result.entries.bow_number,
-                  teamName: result.entries.teams?.team_name || 'Unknown Team',
+                  teamName: teamNameWithLevel,
                   type: 'start',
                   time: startTime,
                   status: result.end_time ? 'finished' : 'assigned',
@@ -104,7 +111,7 @@ export default function RaceTimingPage() {
                   restoredEvents.push({
                     id: `finish-${result.entries.bow_number}-${endTime.getTime()}`,
                     bowNumber: result.entries.bow_number,
-                    teamName: result.entries.teams?.team_name || 'Unknown Team',
+                    teamName: teamNameWithLevel,
                     type: 'finish',
                     time: endTime,
                     status: 'finished',
@@ -182,7 +189,11 @@ export default function RaceTimingPage() {
           setTimeout(async () => {
             if (race?.actual_start) {
             try {
-              const existingResults = await getRaceResultsByRace(BigInt(raceId));
+              const [existingResults, currentBoats] = await Promise.all([
+                getRaceResultsByRace(BigInt(raceId)),
+                getBoatsByRace(BigInt(raceId))
+              ]);
+              const boatEntriesWithLevels = assignLevelsToBoats(currentBoats || []);
               const restoredEvents: TimingEvent[] = [];
 
               for (const result of existingResults) {
@@ -193,11 +204,15 @@ export default function RaceTimingPage() {
                   const correctedStartTime = new Date(startTime.getTime() + (startTime.getTimezoneOffset() * 60000));
                   console.log('Original start_time from DB:', result.start_time, 'Raw parsed:', startTime, 'Timezone corrected:', correctedStartTime);
                   
+                  // Find the boat to get the level
+                  const boat = boatEntriesWithLevels.find(b => b.id === result.entries.id);
+                  const teamNameWithLevel = boat ? getTeamNameWithLevel(boat) : (result.entries.teams?.team_name || 'Unknown Team');
+
                   // Add start event
                   restoredEvents.push({
                     id: `start-${result.entries.bow_number}-${correctedStartTime.getTime()}`,
                     bowNumber: result.entries.bow_number,
-                    teamName: result.entries.teams?.team_name || 'Unknown Team',
+                    teamName: teamNameWithLevel,
                     type: 'start',
                     time: correctedStartTime,
                     status: result.end_time ? 'finished' : 'assigned',
@@ -213,7 +228,7 @@ export default function RaceTimingPage() {
                     restoredEvents.push({
                       id: `finish-${result.entries.bow_number}-${correctedEndTime.getTime()}`,
                       bowNumber: result.entries.bow_number,
-                      teamName: result.entries.teams?.team_name || 'Unknown Team',
+                      teamName: teamNameWithLevel,
                       type: 'finish',
                       time: correctedEndTime,
                       status: 'finished',
@@ -245,7 +260,8 @@ export default function RaceTimingPage() {
           // Reload boat data when entries are updated
           try {
             const boatEntries = await getBoatsByRace(BigInt(raceId));
-            setBoats(boatEntries || []);
+            const boatEntriesWithLevels = assignLevelsToBoats(boatEntries || []);
+            setBoats(boatEntriesWithLevels || []);
           } catch (err) {
             console.error('Error reloading boats:', err);
           }
@@ -257,6 +273,11 @@ export default function RaceTimingPage() {
       supabase.removeChannel(channel);
     };
   }, [raceId, race?.actual_start, raceStartTime]);
+
+  const getTeamNameWithLevel = (boat: BoatEntry): string => {
+    const teamName = boat.teams.team_name;
+    return boat.level ? `${teamName} ${boat.level}` : teamName;
+  };
 
   const getBoatStatusColor = (status: string | null): string => {
     switch (status) {
@@ -402,7 +423,7 @@ export default function RaceTimingPage() {
       newEvent = {
         id: `${type}-${bowNumber}-${now.getTime()}`,
         bowNumber,
-        teamName: boat.teams.team_name,
+        teamName: getTeamNameWithLevel(boat),
         type,
         time: now,
         status: 'assigned'
@@ -483,7 +504,7 @@ export default function RaceTimingPage() {
           await updateBoatStatus(boat.id, BoatStatus.ON_WATER);
           setTimingEvents(prev => prev.map(e => 
             e.id === eventId 
-              ? { ...e, bowNumber, teamName: boat.teams.team_name, status: 'assigned' as const, raceResultId: result.id }
+              ? { ...e, bowNumber, teamName: getTeamNameWithLevel(boat), status: 'assigned' as const, raceResultId: result.id }
               : e
           ));
         }
@@ -506,7 +527,7 @@ export default function RaceTimingPage() {
           await updateBoatStatus(boat.id, BoatStatus.FINISHED);
           setTimingEvents(prev => prev.map(e => 
             e.id === eventId 
-              ? { ...e, bowNumber, teamName: boat.teams.team_name, status: 'finished' as const, raceResultId: activeResult.id }
+              ? { ...e, bowNumber, teamName: getTeamNameWithLevel(boat), status: 'finished' as const, raceResultId: activeResult.id }
               : e
           ));
         } else {
@@ -658,7 +679,7 @@ export default function RaceTimingPage() {
                   className={`p-2 border-2 rounded text-sm transition-colors ${getBoatStatusColor(boat.boat_status)}`}
                 >
                   <div className="font-medium">Bow {boat.bow_number}</div>
-                  <div className="text-gray-600 text-xs">{boat.teams.team_name}</div>
+                  <div className="text-gray-600 text-xs">{getTeamNameWithLevel(boat)}</div>
                   {boat.boat_status && (
                     <div className="text-xs mt-1 opacity-75 capitalize">
                       {boat.boat_status.replace('_', ' ')}
@@ -737,23 +758,6 @@ export default function RaceTimingPage() {
                                   }
                                 }}
                               />
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600 text-right">
-                          <div>{(() => {
-                            const timeStr = event.time.toLocaleTimeString('en-US', { 
-                              hour12: false, 
-                              hour: '2-digit', 
-                              minute: '2-digit', 
-                              second: '2-digit' 
-                            });
-                            console.log('Event time:', event.time, 'Formatted:', timeStr);
-                            return timeStr;
-                          })()}</div>
-                          {raceStartTime && (
-                            <div>
-                              +{Math.floor((event.time.getTime() - raceStartTime.getTime()) / 1000)}s
                             </div>
                           )}
                         </div>

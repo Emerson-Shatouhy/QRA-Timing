@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Race } from "../../utils/types/race";
 import { getRaceResultsByRace } from "../../utils/raceResults/getRaceResult";
 import { createClient } from "../../utils/supabase/client";
+import { getBoatsByRace } from "../../utils/boats/getBoat";
+import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
 import {
   Table,
   TableBody,
@@ -22,6 +24,7 @@ interface RaceResult {
   entries: {
     id: bigint;
     bow_number: number;
+    level?: string | null;
     teams: {
       id: bigint;
       team_name: string;
@@ -42,15 +45,28 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
     
     const fetchResults = async () => {
       try {
-        const raceResults = await getRaceResultsByRace(race.id);
+        const [raceResults, boatEntries] = await Promise.all([
+          getRaceResultsByRace(race.id),
+          getBoatsByRace(race.id)
+        ]);
+        
+        const boatEntriesWithLevels = assignLevelsToBoats(boatEntries || []);
         
         // Filter and sort results
         const finishedResults = raceResults
           .filter((result: any) => result.entries && result.start_time && result.end_time)
-          .map((result: any) => ({
-            ...result,
-            raceTime: calculateRaceTime(result.start_time, result.end_time)
-          }))
+          .map((result: any) => {
+            // Find the boat entry with level
+            const boatWithLevel = boatEntriesWithLevels.find(boat => boat.id === result.entries.id);
+            return {
+              ...result,
+              entries: {
+                ...result.entries,
+                level: boatWithLevel?.level
+              },
+              raceTime: calculateRaceTime(result.start_time, result.end_time)
+            };
+          })
           .sort((a: any, b: any) => a.raceTime - b.raceTime); // Sort by race time (fastest first)
 
         setResults(finishedResults);
@@ -101,6 +117,11 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
 
   const calculateRaceTime = (startTime: string, endTime: string): number => {
     return new Date(endTime).getTime() - new Date(startTime).getTime();
+  };
+
+  const getTeamNameWithLevel = (result: any): string => {
+    const teamName = result.entries.teams.team_name;
+    return result.entries.level ? `${teamName} ${result.entries.level}` : teamName;
   };
 
   const formatRaceTime = (raceTime: number): string => {
@@ -158,8 +179,6 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
               <TableHead className="w-16">Bow</TableHead>
               <TableHead>Team</TableHead>
               <TableHead className="text-right">Time</TableHead>
-              <TableHead className="text-right">Start</TableHead>
-              <TableHead className="text-right">Finish</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -172,16 +191,10 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
                   {result.entries.bow_number}
                 </TableCell>
                 <TableCell>
-                  {result.entries.teams.team_name}
+                  {getTeamNameWithLevel(result)}
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold">
                   {formatRaceTime(result.raceTime)}
-                </TableCell>
-                <TableCell className="text-right text-sm text-gray-600">
-                  {formatTime(result.start_time)}
-                </TableCell>
-                <TableCell className="text-right text-sm text-gray-600">
-                  {formatTime(result.end_time)}
                 </TableCell>
               </TableRow>
             ))}
@@ -200,23 +213,13 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
                 </div>
                 <div>
                   <div className="font-medium">Bow {result.entries.bow_number}</div>
-                  <div className="text-sm text-gray-600">{result.entries.teams.team_name}</div>
+                  <div className="text-sm text-gray-600">{getTeamNameWithLevel(result)}</div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="font-mono font-bold text-lg">
                   {formatRaceTime(result.raceTime)}
                 </div>
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-500 mt-3 pt-2 border-t">
-              <div>
-                <span className="block">Start</span>
-                <span>{formatTime(result.start_time)}</span>
-              </div>
-              <div className="text-right">
-                <span className="block">Finish</span>
-                <span>{formatTime(result.end_time)}</span>
               </div>
             </div>
           </div>
