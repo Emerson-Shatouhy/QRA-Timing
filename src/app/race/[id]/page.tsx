@@ -6,6 +6,7 @@ import { getAllRaces } from "../../../../utils/races/getRace";
 import RaceEntriesTable from "@/components/RaceEntriesTable";
 import RaceDetailsSidebar from "@/components/RaceDetailsSidebar";
 import RaceResultsTable from "@/components/RaceResultsTable";
+import RaceStatusControls from "@/components/RaceStatusControls";
 import { Button } from "@/components/ui/button";
 import { createClient } from "../../../../utils/supabase/client";
 
@@ -128,9 +129,9 @@ export default function RacePage() {
                 {race.race_name || 'Unnamed Race'}
               </h1>
             </div>
-            {race.race_type === RaceType.HEAD_RACE && race.race_status !== RaceStatus.FINISHED && (
+            {(race.race_status === RaceStatus.READY || race.race_status === RaceStatus.STARTED) && (
               <Button onClick={handleStartRace} className="w-full sm:w-auto">
-                Manage Race
+                Open Timing
               </Button>
             )}
           </div>
@@ -142,8 +143,9 @@ export default function RacePage() {
                 <RaceResultsTable race={race} />
               )}
             </div>
-            <div className="lg:w-80 lg:shrink-0">
+            <div className="lg:w-80 lg:shrink-0 space-y-4">
               <RaceDetailsSidebar race={race} />
+              <RaceStatusControls race={race} raceId={raceId} />
             </div>
           </div>
         </div>

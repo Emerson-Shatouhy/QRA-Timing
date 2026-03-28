@@ -1,16 +1,17 @@
 'use client';
+
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { createClient } from '../../../../../utils/supabase/client';
+import { createClient } from '../../../utils/supabase/client';
+import { useProfile } from '@/contexts/ProfileContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RaceType, RaceStatus } from '../../../../../utils/types/race';
-import { RawTiming } from '../../../../../utils/types/rawTiming';
+import { RaceType, RaceStatus } from '../../../utils/types/race';
+import { RawTiming } from '../../../utils/types/rawTiming';
 import {
   insertRawTiming,
   assignBowNumber,
   deleteRawTiming,
-} from '../../../../../utils/rawTimings/getRawTiming';
+} from '../../../utils/rawTimings/getRawTiming';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,10 +61,8 @@ function formatTime(iso: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function RaceTimingPage() {
-  const params = useParams();
-  const router = useRouter();
-  const raceId = parseInt(params.id as string, 10);
+export default function TimerPage() {
+  const { loading: profileLoading } = useProfile();
   const supabase = useRef(createClient()).current;
 
   const [race, setRace] = useState<Race | null>(null);
@@ -76,14 +75,39 @@ export default function RaceTimingPage() {
   const [results, setResults] = useState<EntryResult[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
 
+  const [timerProfiles, setTimerProfiles] = useState<Record<string, string>>({});
   const [bowInputs, setBowInputs] = useState<Record<string, string>>({});
   const [now, setNow] = useState(new Date());
   const [isTapping, setIsTapping] = useState(false);
 
-  // ─── Load ───────────────────────────────────────────────────────────────────
+  // ─── Timer profile lookup ─────────────────────────────────────────────────
 
-  const refreshResults = useCallback(async () => {
-    // Get all entry IDs for this race first
+  const ensureTimerProfiles = useCallback(async (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    setTimerProfiles((prev) => {
+      const missing = userIds.filter((id) => !(id in prev));
+      if (missing.length === 0) return prev;
+      supabase
+        .from('profiles')
+        .select('id, display_name, email')
+        .in('id', missing)
+        .then(({ data }) => {
+          if (!data) return;
+          setTimerProfiles((current) => {
+            const next = { ...current };
+            for (const p of data) {
+              next[p.id] = p.display_name || p.email || p.id.slice(0, 8);
+            }
+            return next;
+          });
+        });
+      return prev;
+    });
+  }, [supabase]);
+
+  // ─── Results refresh ──────────────────────────────────────────────────────
+
+  const refreshResults = useCallback(async (raceId: number) => {
     const { data: entryIds } = await supabase
       .from('entries')
       .select('id')
@@ -110,25 +134,39 @@ export default function RaceTimingPage() {
         status: r.status,
       }))
     );
-  }, [raceId, supabase]);
+  }, [supabase]);
 
-  useEffect(() => {
-    async function load() {
+  // ─── Load — extracted to useCallback so realtime can trigger it ──────────
+
+  const loadRace = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUserId(user?.id ?? null);
 
       const { data: raceData, error: raceErr } = await supabase
         .from('races')
         .select('id, race_name, race_type, race_status, actual_start')
-        .eq('id', raceId)
-        .single();
+        .eq('race_status', RaceStatus.STARTED)
+        .maybeSingle();
 
-      if (raceErr || !raceData) {
-        setError('Race not found');
-        setLoading(false);
+      if (raceErr) {
+        setError('Failed to load races');
         return;
       }
+
+      if (!raceData) {
+        setRace(null);
+        setEntries([]);
+        setMyTaps([]);
+        setAllTaps([]);
+        setResults([]);
+        return;
+      }
+
       setRace(raceData);
+      const raceId = raceData.id;
 
       const { data: entryData } = await supabase
         .from('entries')
@@ -157,13 +195,23 @@ export default function RaceTimingPage() {
         setMyTaps(taps.filter((t) => t.timer_user_id === user.id && t.bow_number === null));
       }
 
-      await refreshResults();
+      const timerIds = [...new Set(taps.map((t) => t.timer_user_id).filter(Boolean))];
+      await ensureTimerProfiles(timerIds as string[]);
+
+      await refreshResults(raceId);
+    } catch (err) {
+      console.error('Timer page load error:', err);
+      setError('Failed to load. Please refresh.');
+    } finally {
       setLoading(false);
     }
-    load();
-  }, [raceId, supabase, refreshResults]);
+  }, [supabase, refreshResults, ensureTimerProfiles]);
 
-  // ─── Live clock ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    loadRace();
+  }, [loadRace]);
+
+  // ─── Live clock ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (race?.race_status === RaceStatus.FINISHED || race?.race_status === RaceStatus.ABANDONED) return;
@@ -171,115 +219,133 @@ export default function RaceTimingPage() {
     return () => clearInterval(interval);
   }, [race?.race_status]);
 
-  // ─── Realtime ───────────────────────────────────────────────────────────────
+  // ─── Realtime ────────────────────────────────────────────────────────────
+  //
+  // Two subscription modes:
+  //   1. No race / finished race → watch globally for the NEXT race to start,
+  //      then call loadRace() to automatically pull timers into it.
+  //   2. Active race → watch taps, results, and the current race row for updates.
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`race-timing-${raceId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'raw_timings', filter: `race_id=eq.${raceId}` },
-        (payload) => {
-          setAllTaps((prev) => {
+    const isFinished =
+      race?.race_status === RaceStatus.FINISHED ||
+      race?.race_status === RaceStatus.ABANDONED;
+
+    const channels: ReturnType<typeof supabase.channel>[] = [];
+
+    // ── Mode 1: watching for the next race to start ────────────────────────
+    if (!race || isFinished) {
+      const watchChannel = supabase
+        .channel('timer-watch-next')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'races' },
+          (payload) => {
+            const updated = payload.new as Race;
+            if (updated.race_status === RaceStatus.STARTED) {
+              loadRace();
+            }
+          }
+        )
+        .subscribe();
+      channels.push(watchChannel);
+    }
+
+    // ── Mode 2: subscriptions for the currently active race ────────────────
+    if (race) {
+      const raceId = race.id;
+
+      const raceChannel = supabase
+        .channel(`timer-timing-${raceId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'raw_timings', filter: `race_id=eq.${raceId}` },
+          (payload) => {
             if (payload.eventType === 'INSERT') {
               const newTap = payload.new as RawTiming;
-              return prev.some((x) => x.id === newTap.id) ? prev : [newTap, ...prev];
+              if (newTap.timer_user_id) ensureTimerProfiles([newTap.timer_user_id]);
             }
-            if (payload.eventType === 'UPDATE')
-              return prev.map((t) => (t.id === (payload.new as RawTiming).id ? (payload.new as RawTiming) : t));
-            if (payload.eventType === 'DELETE')
-              return prev.filter((t) => t.id !== (payload.old as { id: string }).id);
-            return prev;
-          });
-          setMyTaps((prev) => {
-            if (payload.eventType === 'INSERT') {
-              const t = payload.new as RawTiming;
-              if (t.timer_user_id === currentUserId && t.bow_number === null) {
-                return prev.some((x) => x.id === t.id) ? prev : [t, ...prev];
+
+            setAllTaps((prev) => {
+              if (payload.eventType === 'INSERT') {
+                const newTap = payload.new as RawTiming;
+                return prev.some((x) => x.id === newTap.id) ? prev : [newTap, ...prev];
               }
-            }
-            if (payload.eventType === 'UPDATE') {
-              const t = payload.new as RawTiming;
-              if (t.bow_number !== null) return prev.filter((x) => x.id !== t.id);
-            }
-            if (payload.eventType === 'DELETE')
-              return prev.filter((x) => x.id !== (payload.old as { id: string }).id);
-            return prev;
-          });
-        }
-      )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'race_results' }, () => {
-        refreshResults();
-      })
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'races', filter: `id=eq.${raceId}` },
-        (payload) => setRace((prev) => prev ? { ...prev, ...(payload.new as Partial<Race>) } : prev)
-      )
-      .subscribe();
+              if (payload.eventType === 'UPDATE')
+                return prev.map((t) => (t.id === (payload.new as RawTiming).id ? (payload.new as RawTiming) : t));
+              if (payload.eventType === 'DELETE')
+                return prev.filter((t) => t.id !== (payload.old as { id: string }).id);
+              return prev;
+            });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [raceId, currentUserId, supabase, refreshResults]);
+            setMyTaps((prev) => {
+              if (payload.eventType === 'INSERT') {
+                const t = payload.new as RawTiming;
+                if (t.timer_user_id === currentUserId && t.bow_number === null) {
+                  return prev.some((x) => x.id === t.id) ? prev : [t, ...prev];
+                }
+              }
+              if (payload.eventType === 'UPDATE') {
+                const t = payload.new as RawTiming;
+                if (t.bow_number !== null) return prev.filter((x) => x.id !== t.id);
+              }
+              if (payload.eventType === 'DELETE')
+                return prev.filter((x) => x.id !== (payload.old as { id: string }).id);
+              return prev;
+            });
+          }
+        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'race_results' }, () => {
+          refreshResults(raceId);
+        })
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'races', filter: `id=eq.${raceId}` },
+          (payload) => {
+            const updatedRace = payload.new as Race;
+            // Race finished or abandoned — go straight back to the waiting screen
+            if (
+              updatedRace.race_status === RaceStatus.FINISHED ||
+              updatedRace.race_status === RaceStatus.ABANDONED
+            ) {
+              loadRace();
+            } else {
+              setRace((prev) => prev ? { ...prev, ...updatedRace } : prev);
+            }
+          }
+        )
+        .subscribe();
 
-  // ─── Actions ─────────────────────────────────────────────────────────────────
+      channels.push(raceChannel);
+    }
+
+    return () => { channels.forEach((ch) => supabase.removeChannel(ch)); };
+  }, [race, currentUserId, supabase, refreshResults, ensureTimerProfiles, loadRace]);
+
+  // ─── Derived state ────────────────────────────────────────────────────────
 
   const isHeadRace = race?.race_type === RaceType.HEAD_RACE || race?.race_type === RaceType.TIME_TRIAL;
   const isStarted = !!race?.actual_start;
   const anyEntryStarted = isHeadRace && entries.some((e) => e.actual_start);
 
-  const handleStartRace = async () => {
-    const startTime = new Date();
-    const { error } = await supabase
-      .from('races')
-      .update({ actual_start: startTime.toISOString(), race_status: RaceStatus.STARTED })
-      .eq('id', raceId);
-    if (error) alert('Failed to start race: ' + error.message);
-  };
-
-  const handleFinishRace = async () => {
-    const { error } = await supabase
-      .from('races')
-      .update({ race_status: RaceStatus.FINISHED })
-      .eq('id', raceId);
-    if (error) console.error('Failed to finish race:', error.message);
-  };
-
-  const handleStartEntry = async (entryId: number) => {
-    const startTime = new Date();
-    const { error } = await supabase
-      .from('entries')
-      .update({ actual_start: startTime.toISOString() })
-      .eq('id', entryId);
-    if (error) { alert('Failed to record start: ' + error.message); return; }
-    if (!isStarted) {
-      await supabase.from('races').update({ race_status: RaceStatus.STARTED }).eq('id', raceId);
-    }
-    setEntries((prev) =>
-      prev.map((e) => (e.id === entryId ? { ...e, actual_start: startTime.toISOString() } : e))
-    );
-    // Run pipeline for any already-assigned taps with this bow
-    const entry = entries.find((e) => e.id === entryId);
-    if (entry) {
-      await fetch(`/api/pipeline/${raceId}/${entry.bow_number}`, { method: 'POST' });
-    }
-  };
+  // ─── Actions ──────────────────────────────────────────────────────────────
 
   const handleTap = async () => {
-    if (isTapping) return;
+    if (isTapping || !race) return;
     setIsTapping(true);
     const tapTime = new Date();
     const optimisticId = `opt-${Date.now()}`;
     const optimisticTap: RawTiming = {
-      id: optimisticId, created_at: tapTime.toISOString(), race_id: raceId,
+      id: optimisticId, created_at: tapTime.toISOString(), race_id: race.id,
       timer_user_id: currentUserId ?? '', recorded_at: tapTime.toISOString(),
       bow_number: null, is_outlier: false, outlier_delta_ms: null, notes: null,
     };
     setMyTaps((prev) => [optimisticTap, ...prev]);
 
-    const result = await insertRawTiming(raceId, tapTime);
+    const result = await insertRawTiming(race.id, tapTime);
     if (!result) {
       setMyTaps((prev) => prev.filter((t) => t.id !== optimisticId));
-      console.error('Failed to record tap. Check your connection.');
+      console.error('Failed to record tap.');
       setIsTapping(false);
       return;
     }
@@ -288,6 +354,7 @@ export default function RaceTimingPage() {
   };
 
   const handleAssign = async (tapId: string) => {
+    if (!race) return;
     const bowStr = bowInputs[tapId]?.trim();
     const bowNumber = parseInt(bowStr ?? '', 10);
     if (isNaN(bowNumber) || bowNumber <= 0) return;
@@ -301,29 +368,12 @@ export default function RaceTimingPage() {
     const ok = await assignBowNumber(tapId, bowNumber);
     if (!ok) { alert('Failed to assign bow number.'); return; }
 
-    await fetch(`/api/pipeline/${raceId}/${bowNumber}`, { method: 'POST' });
+    await fetch(`/api/pipeline/${race.id}/${bowNumber}`, { method: 'POST' });
   };
 
   const handleDeleteTap = async (tapId: string) => {
     setMyTaps((prev) => prev.filter((t) => t.id !== tapId));
     await deleteRawTiming(tapId);
-  };
-
-  const handleSetEntryStatus = async (entryId: number, status: 'dns' | 'dnf' | 'dsq' | null) => {
-    // Update race_results
-    await supabase
-      .from('race_results')
-      .update({ status: status })
-      .eq('entry_id', entryId);
-
-    // Update entries boat_status
-    await supabase
-      .from('entries')
-      .update({ boat_status: status ?? 'entered' })
-      .eq('id', entryId);
-
-    // Refresh results
-    await refreshResults();
   };
 
   const sortedResults = [...results].sort((a, b) => {
@@ -341,95 +391,62 @@ export default function RaceTimingPage() {
     ? now.getTime() - new Date(race.actual_start).getTime()
     : null;
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ──────────────────────────────────────────────────────────────
 
-  if (loading) return <div className="p-8 text-gray-500">Loading timing system...</div>;
-  if (error || !race) return <div className="p-8 text-red-600">{error ?? 'Race not found'}</div>;
+  if (profileLoading || loading) {
+    return <div className="p-8 text-gray-500">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="p-8 text-red-600">{error}</div>;
+  }
+
+  // No active race — waiting state
+  if (!race) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="text-center space-y-6">
+          <div className="flex justify-center">
+            <div className="relative h-20 w-20">
+              <div className="absolute inset-0 rounded-full bg-blue-500 animate-pulse opacity-75" />
+              <div className="absolute inset-2 rounded-full bg-blue-400 animate-pulse opacity-50" />
+            </div>
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900">No active race</h1>
+            <p className="text-lg text-gray-500 mt-2">Waiting for a race to start...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
 
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={() => router.push(`/race/${raceId}`)}>← Back</Button>
-        <div>
-          <h1 className="text-xl font-bold">{race.race_name ?? 'Unnamed Race'}</h1>
-          <p className="text-xs text-gray-500">{isHeadRace ? 'Head / Time Trial' : 'Sprint'} · Timing</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">{race.race_name ?? 'Unnamed Race'}</h1>
+        <p className="text-sm text-gray-500">{isHeadRace ? 'Head / Time Trial' : 'Sprint'} · Timer</p>
       </div>
 
-      {/* Sprint start */}
-      {!isHeadRace && (
+      {/* Sprint timing display */}
+      {!isHeadRace && isStarted && (
         <div className="bg-white rounded-lg border p-4">
-          {!isStarted ? (
-            <div className="flex items-center gap-4">
-              <Button size="lg" onClick={handleStartRace}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold px-8">
-                START RACE
-              </Button>
-              <p className="text-sm text-gray-500">Official presses this at the start signal.</p>
-            </div>
-          ) : race.race_status === RaceStatus.FINISHED ? (
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700
-                               text-sm font-medium px-3 py-1 rounded-full">
-                ✓ Race Finished
-              </span>
-              <span className="text-xs text-gray-400">
-                {race.actual_start ? `Started ${formatTime(race.actual_start)}` : ''}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-6 flex-wrap">
-              <div>
-                <div className="text-4xl font-mono font-bold">
-                  {raceElapsed !== null && raceElapsed > 0 ? formatElapsed(raceElapsed) : '--:--.-'}
-                </div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  Started {formatTime(race.actual_start!)}
-                </div>
+          <div className="flex items-center gap-6 flex-wrap">
+            <div>
+              <div className="text-4xl font-mono font-bold">
+                {raceElapsed !== null && raceElapsed > 0 ? formatElapsed(raceElapsed) : '--:--.-'}
               </div>
-              <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700
-                               text-sm font-medium px-3 py-1 rounded-full">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                Race Running
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleFinishRace}
-                className="text-gray-600 border-gray-300 hover:bg-gray-50"
-              >
-                Finish Race
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Head race entry starts */}
-      {isHeadRace && (
-        <div className="bg-white rounded-lg border">
-          <div className="px-4 py-3 border-b">
-            <h2 className="font-semibold text-sm">Entry Starts</h2>
-            <p className="text-xs text-gray-400">Official taps START as each boat launches.</p>
-          </div>
-          <div className="divide-y max-h-56 overflow-y-auto">
-            {entries.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                <span className="font-bold w-10">#{e.bow_number}</span>
-                <span className="flex-1 text-gray-700 truncate">{e.team_name}</span>
-                {e.actual_start ? (
-                  <span className="font-mono text-xs text-green-600">{formatTime(e.actual_start)}</span>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs"
-                    onClick={() => handleStartEntry(e.id)}>
-                    START
-                  </Button>
-                )}
+              <div className="text-xs text-gray-400 mt-0.5">
+                Started {formatTime(race.actual_start!)}
               </div>
-            ))}
-            {entries.length === 0 && <p className="p-4 text-gray-400 text-sm">No entries.</p>}
+            </div>
+            <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700
+                             text-sm font-medium px-3 py-1 rounded-full">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              Race Running
+            </span>
           </div>
         </div>
       )}
@@ -452,7 +469,7 @@ export default function RaceTimingPage() {
             TAP
           </button>
 
-          {/* Unassigned taps */}
+          {/* Unassigned taps — visible until assigned even after race ends */}
           {myTaps.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
@@ -481,13 +498,9 @@ export default function RaceTimingPage() {
                       onKeyDown={(e) => { if (e.key === 'Enter') handleAssign(tap.id); }}
                       autoFocus={myTaps[0]?.id === tap.id}
                     />
-                    <Button size="sm" className="h-8 px-3" onClick={() => handleAssign(tap.id)}>
-                      ✓
-                    </Button>
+                    <Button size="sm" className="h-8 px-3" onClick={() => handleAssign(tap.id)}>✓</Button>
                     <Button size="sm" variant="ghost" className="h-8 px-2 text-gray-300 hover:text-red-500"
-                      onClick={() => handleDeleteTap(tap.id)} title="Discard tap">
-                      ✕
-                    </Button>
+                      onClick={() => handleDeleteTap(tap.id)} title="Discard tap">✕</Button>
                   </div>
                 );
               })}
@@ -525,7 +538,6 @@ export default function RaceTimingPage() {
                   r.status === 'dns' ? 'bg-orange-100 text-orange-700' :
                   r.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
                   r.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
-
                 return (
                   <tr key={r.entry_id} className={
                     r.status === 'dsq' ? 'bg-red-50' :
@@ -534,14 +546,12 @@ export default function RaceTimingPage() {
                     r.has_outlier_flag ? 'bg-yellow-50' : ''
                   }>
                     <td className="px-4 py-2.5 text-gray-400 font-medium">
-                      {isSpecialStatus ? '—' :
-                        r.elapsed_ms !== null ? i + 1 : '—'}
+                      {isSpecialStatus ? '—' : r.elapsed_ms !== null ? i + 1 : '—'}
                     </td>
                     <td className="px-4 py-2.5 font-bold">{r.bow_number}</td>
                     <td className="px-4 py-2.5 text-gray-700">{r.team_name}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold">
-                      {isSpecialStatus ? '—' :
-                        r.elapsed_ms !== null ? formatElapsed(r.elapsed_ms) : '—'}
+                      {isSpecialStatus ? '—' : r.elapsed_ms !== null ? formatElapsed(r.elapsed_ms) : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-center text-gray-500">
                       {r.timing_count}
@@ -551,39 +561,11 @@ export default function RaceTimingPage() {
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       {isSpecialStatus ? (
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
-                            {r.status?.toUpperCase()}
-                          </span>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, null)}
-                            className="text-gray-300 hover:text-gray-600 text-xs"
-                            title="Clear status"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
+                          {r.status?.toUpperCase()}
+                        </span>
                       ) : (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dns')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                          >
-                            DNS
-                          </button>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dnf')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
-                          >
-                            DNF
-                          </button>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dsq')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            DSQ
-                          </button>
-                        </div>
+                        <span className="text-xs text-gray-400">—</span>
                       )}
                     </td>
                   </tr>
@@ -594,7 +576,7 @@ export default function RaceTimingPage() {
         )}
       </div>
 
-      {/* Raw taps collapsible */}
+      {/* Raw taps — shows timer identity */}
       <details className="bg-white rounded-lg border text-sm">
         <summary className="px-4 py-3 cursor-pointer font-medium text-gray-500 hover:text-gray-800">
           All raw taps ({allTaps.length})
@@ -605,18 +587,26 @@ export default function RaceTimingPage() {
             const elapsed = refStart
               ? new Date(tap.recorded_at).getTime() - new Date(refStart).getTime()
               : null;
+            const timerLabel = tap.timer_user_id
+              ? timerProfiles[tap.timer_user_id] ?? tap.timer_user_id.slice(0, 8)
+              : 'unknown';
+            const isMe = tap.timer_user_id === currentUserId;
             return (
               <div key={tap.id}
                 className={`flex items-center gap-3 px-4 py-2 text-xs ${tap.is_outlier ? 'bg-red-50' : ''}`}>
-                <span className="font-mono text-gray-400">{formatTime(tap.recorded_at)}</span>
+                <span className="font-mono text-gray-400 shrink-0">{formatTime(tap.recorded_at)}</span>
                 {elapsed !== null && elapsed > 0 && (
-                  <span className="font-mono">{formatElapsed(elapsed)}</span>
+                  <span className="font-mono shrink-0">{formatElapsed(elapsed)}</span>
                 )}
-                <span className="text-gray-500">
+                <span className="text-gray-500 shrink-0">
                   {tap.bow_number !== null ? `→ Bow #${tap.bow_number}` : 'unassigned'}
                 </span>
+                <span className={`ml-auto shrink-0 px-1.5 py-0.5 rounded text-xs font-medium
+                  ${isMe ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {isMe ? `${timerLabel} (you)` : timerLabel}
+                </span>
                 {tap.is_outlier && (
-                  <span className="text-red-500 font-semibold">
+                  <span className="text-red-500 font-semibold shrink-0">
                     outlier ({tap.outlier_delta_ms !== null
                       ? `${tap.outlier_delta_ms > 0 ? '+' : ''}${(tap.outlier_delta_ms / 1000).toFixed(2)}s`
                       : '?'})

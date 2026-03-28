@@ -28,5 +28,6 @@ export interface Race {
    weather_conditions: string | null;
    race_type: RaceType | null;
    max_entries: number | null;
+   is_official: boolean | null;
 }
 

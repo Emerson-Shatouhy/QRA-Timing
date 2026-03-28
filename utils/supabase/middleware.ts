@@ -49,6 +49,33 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
    }
 
+   // If user is authenticated, check their role
+   if (user) {
+      const { data: profile } = await supabase
+         .from('profiles')
+         .select('role')
+         .eq('id', user.id)
+         .single()
+
+      const role = profile?.role
+
+      // Timer users can only access /timer, /login, /auth, /api routes
+      if (role === 'timer') {
+         const pathname = request.nextUrl.pathname
+         const isAllowedPath =
+            pathname.startsWith('/timer') ||
+            pathname.startsWith('/login') ||
+            pathname.startsWith('/auth') ||
+            pathname.startsWith('/api')
+
+         if (!isAllowedPath) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/timer'
+            return NextResponse.redirect(url)
+         }
+      }
+   }
+
    // IMPORTANT: You *must* return the supabaseResponse object as it is.
    // If you're creating a new response object with NextResponse.next() make sure to:
    // 1. Pass the request in it, like so:

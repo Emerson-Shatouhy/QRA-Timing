@@ -136,7 +136,8 @@ export default function EntriesTable() {
               <TableCell>{getRaceName(entry.race_id)}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded text-xs ${
-                  entry.boat_status === 'registered' ? 'bg-blue-100 text-blue-800' :
+                  entry.boat_status === null ? 'bg-gray-50 text-gray-500' :
+                  entry.boat_status === 'entered' ? 'bg-blue-100 text-blue-800' :
                   entry.boat_status === 'ready' ? 'bg-yellow-100 text-yellow-800' :
                   entry.boat_status === 'on_water' ? 'bg-green-100 text-green-800' :
                   entry.boat_status === 'finished' ? 'bg-gray-100 text-gray-800' :
