@@ -62,7 +62,8 @@ export async function getBoatsByRace(raceId: bigint) {
          *,
          teams (
             id,
-            team_name
+            team_name,
+            oarspotter_key
          )
       `)
       .eq('race_id', Number(raceId));

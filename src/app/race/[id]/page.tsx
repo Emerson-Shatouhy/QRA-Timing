@@ -75,7 +75,11 @@ export default function RacePage() {
   }, [raceId]);
 
   const handleBackToRaces = () => {
-    router.push('/');
+    if (race?.regatta_id) {
+      router.push(`/regatta/${race.regatta_id}`);
+    } else {
+      router.push('/');
+    }
   };
 
   const handleStartRace = () => {
@@ -89,7 +93,7 @@ export default function RacePage() {
           <div className="space-y-8">
             <div className="flex items-center gap-4">
               <Button onClick={handleBackToRaces} variant="outline">
-                ← Back to Races
+                ← Back to Regatta
               </Button>
             </div>
             <p>Loading race...</p>
@@ -106,7 +110,7 @@ export default function RacePage() {
           <div className="space-y-8">
             <div className="flex items-center gap-4">
               <Button onClick={handleBackToRaces} variant="outline">
-                ← Back to Races
+                ← Back to Regatta
               </Button>
             </div>
             <p className="text-red-600">{error || "Race not found"}</p>
@@ -123,7 +127,7 @@ export default function RacePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <Button onClick={handleBackToRaces} variant="outline">
-                ← Back to Races
+                ← Back to Regatta
               </Button>
               <h1 className="text-xl md:text-2xl font-bold">
                 {race.race_name || 'Unnamed Race'}

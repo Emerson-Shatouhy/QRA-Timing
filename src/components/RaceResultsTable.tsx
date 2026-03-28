@@ -5,6 +5,7 @@ import { getRaceResultsByRace } from "../../utils/raceResults/getRaceResult";
 import { createClient } from "../../utils/supabase/client";
 import { getBoatsByRace } from "../../utils/boats/getBoat";
 import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
+import OarBlade from "./OarBlade";
 import {
   Table,
   TableBody,
@@ -28,6 +29,7 @@ interface RaceResult {
     teams: {
       id: bigint;
       team_name: string;
+      oarspotter_key: string | null;
     };
   };
 }
@@ -52,22 +54,38 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
         
         const boatEntriesWithLevels = assignLevelsToBoats(boatEntries || []);
         
-        // Filter and sort results
+        // Filter and sort results — include special statuses (DNF/DSQ/DNS)
+        const specialStatuses = ['dns', 'dnf', 'dsq'];
         const finishedResults = raceResults
-          .filter((result: any) => result.entries && result.start_time && result.end_time)
+          .filter((result: any) => result.entries && (
+            (result.start_time && result.end_time) ||
+            (result.status && specialStatuses.includes(result.status))
+          ))
           .map((result: any) => {
             // Find the boat entry with level
             const boatWithLevel = boatEntriesWithLevels.find(boat => boat.id === result.entries.id);
+            const isSpecialStatus = result.status && specialStatuses.includes(result.status);
             return {
               ...result,
               entries: {
                 ...result.entries,
                 level: boatWithLevel?.level
               },
-              raceTime: calculateRaceTime(result.start_time, result.end_time)
+              raceTime: isSpecialStatus ? null : calculateRaceTime(result.start_time, result.end_time),
+              isSpecialStatus,
             };
           })
-          .sort((a: any, b: any) => a.raceTime - b.raceTime); // Sort by race time (fastest first)
+          .sort((a: any, b: any) => {
+            // Special statuses always sort to the bottom
+            if (a.isSpecialStatus && !b.isSpecialStatus) return 1;
+            if (!a.isSpecialStatus && b.isSpecialStatus) return -1;
+            // Both special: sort by status (DNS, DNF, DSQ)
+            if (a.isSpecialStatus && b.isSpecialStatus) {
+              return specialStatuses.indexOf(a.status) - specialStatuses.indexOf(b.status);
+            }
+            // Both have times: sort fastest first
+            return a.raceTime - b.raceTime;
+          });
 
         setResults(finishedResults);
       } catch (error) {
@@ -182,48 +200,92 @@ export default function RaceResultsTable({ race }: RaceResultsTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {results.map((result: any, index) => (
-              <TableRow key={result.id.toString()}>
-                <TableCell className="font-medium">
-                  {index + 1}
-                </TableCell>
-                <TableCell className="font-medium">
-                  {result.entries.bow_number}
-                </TableCell>
-                <TableCell>
-                  {getTeamNameWithLevel(result)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold">
-                  {formatRaceTime(result.raceTime)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {results.map((result: any, index) => {
+              const statusLabel = result.status?.toUpperCase();
+              const statusColor =
+                result.status === 'dns' ? 'bg-orange-100 text-orange-700' :
+                result.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
+                result.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
+
+              return (
+                <TableRow key={result.id.toString()} className={
+                  result.status === 'dsq' ? 'bg-red-50' :
+                  result.status === 'dnf' ? 'bg-yellow-50' :
+                  result.status === 'dns' ? 'bg-orange-50' : ''
+                }>
+                  <TableCell className="font-medium">
+                    {result.isSpecialStatus ? '—' : index + 1}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {result.entries.bow_number}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={20} />
+                      {getTeamNameWithLevel(result)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-bold">
+                    {result.isSpecialStatus ? (
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
+                        {statusLabel}
+                      </span>
+                    ) : (
+                      formatRaceTime(result.raceTime)
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
 
       {/* Mobile Card Layout */}
       <div className="md:hidden space-y-3">
-        {results.map((result: any, index) => (
-          <div key={result.id.toString()} className="border rounded-lg p-4 bg-gray-50">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-bold">
-                  {index + 1}
+        {results.map((result: any, index) => {
+          const statusLabel = result.status?.toUpperCase();
+          const statusColor =
+            result.status === 'dns' ? 'bg-orange-100 text-orange-700' :
+            result.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
+            result.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
+          const cardBg =
+            result.status === 'dsq' ? 'bg-red-50 border-red-200' :
+            result.status === 'dnf' ? 'bg-yellow-50 border-yellow-200' :
+            result.status === 'dns' ? 'bg-orange-50 border-orange-200' : 'bg-gray-50';
+
+          return (
+            <div key={result.id.toString()} className={`border rounded-lg p-4 ${cardBg}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    result.isSpecialStatus ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {result.isSpecialStatus ? '—' : index + 1}
+                  </div>
+                  <div>
+                    <div className="font-medium">Bow {result.entries.bow_number}</div>
+                    <div className="text-sm text-gray-600 flex items-center gap-1.5">
+                      <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={18} />
+                      {getTeamNameWithLevel(result)}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-medium">Bow {result.entries.bow_number}</div>
-                  <div className="text-sm text-gray-600">{getTeamNameWithLevel(result)}</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-mono font-bold text-lg">
-                  {formatRaceTime(result.raceTime)}
+                <div className="text-right">
+                  {result.isSpecialStatus ? (
+                    <span className={`text-sm font-semibold px-3 py-1 rounded-full ${statusColor}`}>
+                      {statusLabel}
+                    </span>
+                  ) : (
+                    <div className="font-mono font-bold text-lg">
+                      {formatRaceTime(result.raceTime)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

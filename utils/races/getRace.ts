@@ -147,3 +147,46 @@ export async function createRace(raceData: {
    return race;
 }
 
+/**
+ * Deletes a race by ID. Also deletes related entries, results, and timings.
+ */
+export async function deleteRace(raceId: number): Promise<boolean> {
+   const supabase = createClient();
+
+   // Delete dependent data first
+   const { data: entryIds } = await supabase.from('entries').select('id').eq('race_id', raceId);
+   if (entryIds && entryIds.length > 0) {
+      await supabase.from('race_results').delete().in('entry_id', entryIds.map(e => e.id));
+   }
+   await supabase.from('raw_timings').delete().eq('race_id', raceId);
+   await supabase.from('entries').delete().eq('race_id', raceId);
+
+   const { error } = await supabase
+      .from('races')
+      .delete()
+      .eq('id', raceId);
+
+   if (error) {
+      console.error('Error deleting race:', error);
+      return false;
+   }
+   return true;
+}
+
+/**
+ * Updates race fields (general-purpose)
+ */
+export async function updateRace(raceId: number, fields: Record<string, unknown>): Promise<boolean> {
+   const supabase = createClient();
+   const { error } = await supabase
+      .from('races')
+      .update(fields)
+      .eq('id', raceId);
+
+   if (error) {
+      console.error('Error updating race:', error);
+      return false;
+   }
+   return true;
+}
+

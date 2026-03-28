@@ -7,6 +7,7 @@ import { Race, RaceStatus } from "../../utils/types/race";
 import { Team } from "../../utils/types/team";
 import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
 import TeamCombobox from "./TeamCombobox";
+import OarBlade from "./OarBlade";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -127,7 +128,7 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
 
     for (const row of toAdd) {
       const bow = parseInt(row.bowNumber);
-      if (isNaN(bow) || bow <= 0) { updateRow(row.key, { status: 'error', error: 'Invalid bow #' }); continue; }
+      if (isNaN(bow) || bow < 0) { updateRow(row.key, { status: 'error', error: 'Invalid bow #' }); continue; }
       if (current.some(e => e.bow_number === bow)) { updateRow(row.key, { status: 'error', error: 'Bow # taken' }); continue; }
       updateRow(row.key, { status: 'adding' });
       const ok = await addBoatToRace(BigInt(row.teamId), race.id, bow);
@@ -165,7 +166,7 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
 
   const saveEdit = async (entryId: bigint) => {
     const bow = parseInt(editingBow);
-    if (isNaN(bow) || bow <= 0) { alert('Invalid bow number'); return; }
+    if (isNaN(bow) || bow < 0) { alert('Invalid bow number'); return; }
     if (entries.some(e => e.bow_number === bow && e.id.toString() !== entryId.toString())) { alert('Bow # already taken'); return; }
     if (await updateBowNumber(entryId, bow)) {
       setEntries(prev => prev.map(e => e.id.toString() === entryId.toString() ? { ...e, bow_number: bow } : e));
@@ -258,7 +259,7 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
                         type="number"
                         value={row.bowNumber}
                         onChange={e => updateRow(row.key, { bowNumber: e.target.value })}
-                        min="1"
+                        min="0"
                         className="h-9 text-sm"
                       />
                     </>
@@ -348,7 +349,7 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
                             value={editingBow}
                             onChange={e => setEditingBow(e.target.value)}
                             className="w-16 h-7 text-sm"
-                            min="1"
+                            min="0"
                             autoFocus
                             onKeyDown={e => {
                               if (e.key === 'Enter') saveEdit(entry.id);
@@ -357,7 +358,12 @@ export default function RaceEntriesTable({ race, onBack }: RaceEntriesTableProps
                           />
                         ) : entry.bow_number ?? '—'}
                       </TableCell>
-                      <TableCell className="font-medium">{teamNameWithLevel(entry)}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <OarBlade oarspotterKey={entry.teams?.oarspotter_key ?? null} size={20} />
+                          {teamNameWithLevel(entry)}
+                        </div>
+                      </TableCell>
                       <TableCell><BoatStatusBadge status={entry.boat_status} /></TableCell>
                       {canManage && (
                         <TableCell>

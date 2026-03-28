@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import OarBlade from "./OarBlade";
 import {
   Select,
   SelectContent,
@@ -36,6 +37,7 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
     secondary_color: '',
     division: '' as TeamDivision | '',
     gender: '' as TeamGender | '',
+    oarspotter_key: '',
   });
 
   const handleInputChange = (field: string, value: string) => {
@@ -58,10 +60,11 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
         formData.secondary_color || undefined,
         (formData.division || undefined) as TeamDivision | undefined,
         (formData.gender || undefined) as TeamGender | undefined,
+        formData.oarspotter_key.trim() || undefined,
       );
 
       if (result) {
-        setFormData({ team_name: '', team_short_name: '', primary_color: '', secondary_color: '', division: '', gender: '' });
+        setFormData({ team_name: '', team_short_name: '', primary_color: '', secondary_color: '', division: '', gender: '', oarspotter_key: '' });
         setOpen(false);
         onTeamCreated?.();
       } else {
@@ -178,6 +181,25 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
                 />
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="oarspotter_key">OarSpotter Key</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="oarspotter_key"
+                value={formData.oarspotter_key}
+                onChange={(e) => handleInputChange('oarspotter_key', e.target.value)}
+                placeholder="e.g. Harvard"
+                className="flex-1"
+              />
+              {formData.oarspotter_key && (
+                <OarBlade oarspotterKey={formData.oarspotter_key} size={28} />
+              )}
+            </div>
+            <p className="text-xs text-gray-400">
+              Image key from oarspotter.com (filename without .png)
+            </p>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

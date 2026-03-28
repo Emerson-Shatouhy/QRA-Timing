@@ -9,6 +9,7 @@ import { Team, TeamDivision, TeamGender } from "../types/team";
  * @param secondaryColor - Optional hex color string
  * @param division - Optional division (D1, D2, D3)
  * @param gender - Optional gender (mens, womens, both)
+ * @param oarspotterKey - Optional OarSpotter image key (filename without .png)
  * @returns The created team or null if failed
  */
 export async function createTeam(
@@ -18,6 +19,7 @@ export async function createTeam(
   secondaryColor?: string,
   division?: TeamDivision,
   gender?: TeamGender,
+  oarspotterKey?: string,
 ): Promise<Team | null> {
   const supabase = createClient();
   const { data: team, error } = await supabase
@@ -29,6 +31,7 @@ export async function createTeam(
       secondary_color: secondaryColor || null,
       division: division || null,
       gender: gender || null,
+      oarspotter_key: oarspotterKey || null,
     })
     .select()
     .single();

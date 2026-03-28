@@ -9,4 +9,5 @@ export interface Team {
    secondary_color: string | null;
    division: TeamDivision | null;
    gender: TeamGender | null;
+   oarspotter_key: string | null;
 }

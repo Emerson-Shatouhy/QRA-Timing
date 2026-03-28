@@ -5,6 +5,7 @@ import { createClient } from '../../../utils/supabase/client';
 import { useProfile } from '@/contexts/ProfileContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import OarBlade from '@/components/OarBlade';
 import { RaceType, RaceStatus } from '../../../utils/types/race';
 import { RawTiming } from '../../../utils/types/rawTiming';
 import {
@@ -27,6 +28,7 @@ interface EntryResult {
   entry_id: number;
   bow_number: number;
   team_name: string;
+  oarspotter_key: string | null;
   elapsed_ms: number | null;
   timing_count: number;
   has_outlier_flag: boolean;
@@ -37,6 +39,7 @@ interface Entry {
   id: number;
   bow_number: number;
   team_name: string;
+  oarspotter_key: string | null;
   actual_start: string | null;
 }
 
@@ -46,8 +49,8 @@ function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const centiseconds = Math.floor((ms % 1000) / 10);
-  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+  const tenths = Math.floor((ms % 1000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
 }
 
 function formatTime(iso: string): string {
@@ -119,7 +122,7 @@ export default function TimerPage() {
       .from('race_results')
       .select(`
         entry_id, elapsed_ms, timing_count, has_outlier_flag, status,
-        entries!inner(bow_number, teams(team_name))
+        entries!inner(bow_number, teams(team_name, oarspotter_key))
       `)
       .in('entry_id', entryIds.map((e: any) => e.id));
 
@@ -128,6 +131,7 @@ export default function TimerPage() {
         entry_id: r.entry_id,
         bow_number: r.entries.bow_number,
         team_name: r.entries.teams?.team_name ?? 'Unknown',
+        oarspotter_key: r.entries.teams?.oarspotter_key ?? null,
         elapsed_ms: r.elapsed_ms,
         timing_count: r.timing_count ?? 0,
         has_outlier_flag: r.has_outlier_flag ?? false,
@@ -170,7 +174,7 @@ export default function TimerPage() {
 
       const { data: entryData } = await supabase
         .from('entries')
-        .select('id, bow_number, actual_start, teams(team_name)')
+        .select('id, bow_number, actual_start, teams(team_name, oarspotter_key)')
         .eq('race_id', raceId)
         .order('bow_number');
 
@@ -179,6 +183,7 @@ export default function TimerPage() {
           id: e.id,
           bow_number: e.bow_number,
           team_name: e.teams?.team_name ?? 'Unknown',
+          oarspotter_key: e.teams?.oarspotter_key ?? null,
           actual_start: e.actual_start,
         }))
       );
@@ -357,7 +362,7 @@ export default function TimerPage() {
     if (!race) return;
     const bowStr = bowInputs[tapId]?.trim();
     const bowNumber = parseInt(bowStr ?? '', 10);
-    if (isNaN(bowNumber) || bowNumber <= 0) return;
+    if (isNaN(bowNumber) || bowNumber < 0) return;
 
     const entry = entries.find((e) => e.bow_number === bowNumber);
     if (!entry) { alert(`Bow ${bowNumber} is not registered in this race.`); return; }
@@ -462,8 +467,8 @@ export default function TimerPage() {
           <button
             onClick={handleTap}
             disabled={isTapping}
-            className="w-full h-28 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-900 disabled:opacity-50
-                       text-white text-3xl font-extrabold tracking-wider shadow-lg
+            className="w-full h-44 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-900 disabled:opacity-50
+                       text-white text-5xl font-extrabold tracking-wider shadow-lg
                        transition-all active:scale-95 select-none touch-none disabled:cursor-not-allowed"
           >
             TAP
@@ -496,7 +501,6 @@ export default function TimerPage() {
                       value={bowInputs[tap.id] ?? ''}
                       onChange={(e) => setBowInputs((p) => ({ ...p, [tap.id]: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleAssign(tap.id); }}
-                      autoFocus={myTaps[0]?.id === tap.id}
                     />
                     <Button size="sm" className="h-8 px-3" onClick={() => handleAssign(tap.id)}>✓</Button>
                     <Button size="sm" variant="ghost" className="h-8 px-2 text-gray-300 hover:text-red-500"
@@ -549,7 +553,12 @@ export default function TimerPage() {
                       {isSpecialStatus ? '—' : r.elapsed_ms !== null ? i + 1 : '—'}
                     </td>
                     <td className="px-4 py-2.5 font-bold">{r.bow_number}</td>
-                    <td className="px-4 py-2.5 text-gray-700">{r.team_name}</td>
+                    <td className="px-4 py-2.5 text-gray-700">
+                      <span className="flex items-center gap-1.5">
+                        <OarBlade oarspotterKey={r.oarspotter_key} size={18} />
+                        {r.team_name}
+                      </span>
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold">
                       {isSpecialStatus ? '—' : r.elapsed_ms !== null ? formatElapsed(r.elapsed_ms) : '—'}
                     </td>

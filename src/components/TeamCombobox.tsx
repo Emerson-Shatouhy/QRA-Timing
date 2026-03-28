@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Team } from '../../utils/types/team';
 import { Input } from '@/components/ui/input';
+import OarBlade from './OarBlade';
 
 interface TeamComboboxProps {
   teams: Team[];
@@ -189,7 +190,10 @@ export default function TeamCombobox({
                             isActive ? 'bg-gray-100' : ''
                           } ${isSelected ? 'font-semibold' : ''}`}
                         >
-                          <span className="flex-1 truncate">{team.team_name}</span>
+                          <span className="flex-1 truncate flex items-center gap-1.5">
+                            <OarBlade oarspotterKey={team.oarspotter_key} size={18} />
+                            {team.team_name}
+                          </span>
                           <div className="flex items-center gap-1 shrink-0">
                             {team.division && (
                               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${DIV_COLORS[team.division] ?? ''}`}>

@@ -8,6 +8,7 @@ import { Boat } from "../../utils/types/boat";
 import { Team } from "../../utils/types/team";
 import { Race } from "../../utils/types/race";
 import { assignLevelsToBoats } from "../../utils/boats/assignLevels";
+import OarBlade from "./OarBlade";
 import {
   Table,
   TableBody,
@@ -92,8 +93,10 @@ export default function EntriesTable() {
     };
   }, []);
 
+  const getTeam = (teamId: bigint) => teams.find(t => t.id === teamId) || null;
+
   const getTeamNameWithLevel = (teamId: bigint, level: string | null): string => {
-    const team = teams.find(t => t.id === teamId);
+    const team = getTeam(teamId);
     const teamName = team?.team_name || 'Unknown Team';
     return level ? `${teamName} ${level}` : teamName;
   };
@@ -132,7 +135,12 @@ export default function EntriesTable() {
               <TableCell className="font-medium">
                 {entry.bow_number || 'N/A'}
               </TableCell>
-              <TableCell>{getTeamNameWithLevel(entry.team_id, entry.level)}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-1.5">
+                  <OarBlade oarspotterKey={getTeam(entry.team_id)?.oarspotter_key ?? null} size={20} />
+                  {getTeamNameWithLevel(entry.team_id, entry.level)}
+                </div>
+              </TableCell>
               <TableCell>{getRaceName(entry.race_id)}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded text-xs ${

@@ -1,11 +1,24 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { Race, RaceStatus, RaceType } from "../../utils/types/race";
+import { getTeamById } from "../../utils/teams/getTeam";
 
 interface RaceDetailsSidebarProps {
   race: Race;
 }
 
 export default function RaceDetailsSidebar({ race }: RaceDetailsSidebarProps) {
+  const [hostTeamName, setHostTeamName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (race.host_team_id) {
+      getTeamById(BigInt(race.host_team_id)).then(team => {
+        setHostTeamName(team?.team_name || null);
+      });
+    } else {
+      setHostTeamName(null);
+    }
+  }, [race.host_team_id]);
   const formatDate = (date: Date | null): string => {
     if (!date) return 'Not specified';
     return new Date(date).toLocaleDateString('en-US', {
@@ -75,6 +88,13 @@ export default function RaceDetailsSidebar({ race }: RaceDetailsSidebarProps) {
               {race.race_name || 'Unnamed Race'}
             </dd>
           </div>
+
+          {hostTeamName && (
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Host School</dt>
+              <dd className="mt-1 text-sm text-gray-900">{hostTeamName}</dd>
+            </div>
+          )}
 
           <div>
             <dt className="text-sm font-medium text-gray-500">Status</dt>

@@ -1,3 +1,5 @@
+import type { EventGender, AgeCategory } from './regatta';
+
 // Enum types based on your PostgreSQL custom types
 export enum RaceStatus {
    SCHEDULED = 'scheduled',
@@ -29,5 +31,12 @@ export interface Race {
    race_type: RaceType | null;
    max_entries: number | null;
    is_official: boolean | null;
+   // New structured fields
+   regatta_id: number | null;
+   gender: EventGender | null;
+   boat_class: string | null;
+   age_category: AgeCategory | null;
+   level: number | null;
+   sort_order: number | null;
+   host_team_id: number | null;
 }
-

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "../../utils/supabase/client";
 import { Team, TeamDivision, TeamGender } from "../../utils/types/team";
 import CreateTeamModal from "./CreateTeamModal";
+import OarBlade from "./OarBlade";
 import {
   Table,
   TableBody,
@@ -187,7 +188,12 @@ export default function TeamsTable() {
           ) : (
             paginated.map((team) => (
               <TableRow key={team.id.toString()}>
-                <TableCell className="font-medium">{team.team_name}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <OarBlade oarspotterKey={team.oarspotter_key} size={22} />
+                    {team.team_name}
+                  </div>
+                </TableCell>
                 <TableCell>{team.team_short_name || '—'}</TableCell>
                 <TableCell>{divisionBadge(team.division)}</TableCell>
                 <TableCell>{genderBadge(team.gender)}</TableCell>

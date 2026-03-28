@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '../../../../../utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import OarBlade from '@/components/OarBlade';
 import { RaceType, RaceStatus } from '../../../../../utils/types/race';
 import { RawTiming } from '../../../../../utils/types/rawTiming';
 import {
@@ -26,6 +27,7 @@ interface EntryResult {
   entry_id: number;
   bow_number: number;
   team_name: string;
+  oarspotter_key: string | null;
   elapsed_ms: number | null;
   timing_count: number;
   has_outlier_flag: boolean;
@@ -36,6 +38,7 @@ interface Entry {
   id: number;
   bow_number: number;
   team_name: string;
+  oarspotter_key: string | null;
   actual_start: string | null;
 }
 
@@ -45,8 +48,8 @@ function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const centiseconds = Math.floor((ms % 1000) / 10);
-  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+  const tenths = Math.floor((ms % 1000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
 }
 
 function formatTime(iso: string): string {
@@ -95,7 +98,7 @@ export default function RaceTimingPage() {
       .from('race_results')
       .select(`
         entry_id, elapsed_ms, timing_count, has_outlier_flag, status,
-        entries!inner(bow_number, teams(team_name))
+        entries!inner(bow_number, teams(team_name, oarspotter_key))
       `)
       .in('entry_id', entryIds.map((e: any) => e.id));
 
@@ -104,6 +107,7 @@ export default function RaceTimingPage() {
         entry_id: r.entry_id,
         bow_number: r.entries.bow_number,
         team_name: r.entries.teams?.team_name ?? 'Unknown',
+        oarspotter_key: r.entries.teams?.oarspotter_key ?? null,
         elapsed_ms: r.elapsed_ms,
         timing_count: r.timing_count ?? 0,
         has_outlier_flag: r.has_outlier_flag ?? false,
@@ -132,7 +136,7 @@ export default function RaceTimingPage() {
 
       const { data: entryData } = await supabase
         .from('entries')
-        .select('id, bow_number, actual_start, teams(team_name)')
+        .select('id, bow_number, actual_start, teams(team_name, oarspotter_key)')
         .eq('race_id', raceId)
         .order('bow_number');
 
@@ -141,6 +145,7 @@ export default function RaceTimingPage() {
           id: e.id,
           bow_number: e.bow_number,
           team_name: e.teams?.team_name ?? 'Unknown',
+          oarspotter_key: e.teams?.oarspotter_key ?? null,
           actual_start: e.actual_start,
         }))
       );
@@ -290,7 +295,7 @@ export default function RaceTimingPage() {
   const handleAssign = async (tapId: string) => {
     const bowStr = bowInputs[tapId]?.trim();
     const bowNumber = parseInt(bowStr ?? '', 10);
-    if (isNaN(bowNumber) || bowNumber <= 0) return;
+    if (isNaN(bowNumber) || bowNumber < 0) return;
 
     const entry = entries.find((e) => e.bow_number === bowNumber);
     if (!entry) { alert(`Bow ${bowNumber} is not registered in this race.`); return; }
@@ -310,11 +315,13 @@ export default function RaceTimingPage() {
   };
 
   const handleSetEntryStatus = async (entryId: number, status: 'dns' | 'dnf' | 'dsq' | null) => {
-    // Update race_results
+    // Upsert race_results so it works even if no result row exists yet
     await supabase
       .from('race_results')
-      .update({ status: status })
-      .eq('entry_id', entryId);
+      .upsert(
+        { entry_id: entryId, status: status },
+        { onConflict: 'entry_id' }
+      );
 
     // Update entries boat_status
     await supabase
@@ -326,11 +333,29 @@ export default function RaceTimingPage() {
     await refreshResults();
   };
 
-  const sortedResults = [...results].sort((a, b) => {
-    const aIsSpecial = a.status && ['dns','dnf','dsq'].includes(a.status);
-    const bIsSpecial = b.status && ['dns','dnf','dsq'].includes(b.status);
+  // Merge all entries with results so every boat appears in the table
+  const mergedResults: EntryResult[] = entries.map((entry) => {
+    const result = results.find((r) => r.entry_id === entry.id);
+    if (result) return result;
+    // Entry with no race_result row yet — show as pending
+    return {
+      entry_id: entry.id,
+      bow_number: entry.bow_number,
+      team_name: entry.team_name,
+      oarspotter_key: entry.oarspotter_key,
+      elapsed_ms: null,
+      timing_count: 0,
+      has_outlier_flag: false,
+      status: null,
+    };
+  });
+
+  const sortedResults = [...mergedResults].sort((a, b) => {
+    const aIsSpecial = a.status && ['dns', 'dnf', 'dsq'].includes(a.status);
+    const bIsSpecial = b.status && ['dns', 'dnf', 'dsq'].includes(b.status);
     if (aIsSpecial && !bIsSpecial) return 1;
     if (!aIsSpecial && bIsSpecial) return -1;
+    // Boats with times sort above those without
     if (a.elapsed_ms !== null && b.elapsed_ms !== null) return a.elapsed_ms - b.elapsed_ms;
     if (a.elapsed_ms !== null) return -1;
     if (b.elapsed_ms !== null) return 1;
@@ -418,7 +443,10 @@ export default function RaceTimingPage() {
             {entries.map((e) => (
               <div key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                 <span className="font-bold w-10">#{e.bow_number}</span>
-                <span className="flex-1 text-gray-700 truncate">{e.team_name}</span>
+                <span className="flex-1 text-gray-700 truncate flex items-center gap-1.5">
+                  <OarBlade oarspotterKey={e.oarspotter_key} size={18} />
+                  {e.team_name}
+                </span>
                 {e.actual_start ? (
                   <span className="font-mono text-xs text-green-600">{formatTime(e.actual_start)}</span>
                 ) : (
@@ -445,8 +473,8 @@ export default function RaceTimingPage() {
           <button
             onClick={handleTap}
             disabled={isTapping}
-            className="w-full h-28 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-900 disabled:opacity-50
-                       text-white text-3xl font-extrabold tracking-wider shadow-lg
+            className="w-full h-44 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-900 disabled:opacity-50
+                       text-white text-5xl font-extrabold tracking-wider shadow-lg
                        transition-all active:scale-95 select-none touch-none disabled:cursor-not-allowed"
           >
             TAP
@@ -479,7 +507,6 @@ export default function RaceTimingPage() {
                       value={bowInputs[tap.id] ?? ''}
                       onChange={(e) => setBowInputs((p) => ({ ...p, [tap.id]: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleAssign(tap.id); }}
-                      autoFocus={myTaps[0]?.id === tap.id}
                     />
                     <Button size="sm" className="h-8 px-3" onClick={() => handleAssign(tap.id)}>
                       ✓
@@ -505,7 +532,7 @@ export default function RaceTimingPage() {
           </span>
         </div>
         {sortedResults.length === 0 ? (
-          <p className="p-4 text-sm text-gray-400">No finishes recorded yet.</p>
+          <p className="p-4 text-sm text-gray-400">No entries for this race.</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-400 uppercase border-b">
@@ -519,76 +546,92 @@ export default function RaceTimingPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {sortedResults.map((r, i) => {
-                const isSpecialStatus = r.status && ['dns','dnf','dsq'].includes(r.status);
-                const statusColor =
-                  r.status === 'dns' ? 'bg-orange-100 text-orange-700' :
-                  r.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
-                  r.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
+              {(() => {
+                // Pre-compute rank: only count entries with a time and no special status
+                let rank = 0;
+                const ranks = sortedResults.map((r) => {
+                  const isSpecial = r.status && ['dns', 'dnf', 'dsq'].includes(r.status);
+                  if (!isSpecial && r.elapsed_ms !== null) {
+                    rank++;
+                    return rank;
+                  }
+                  return null;
+                });
+                return sortedResults.map((r, i) => {
+                  const isSpecialStatus = r.status && ['dns', 'dnf', 'dsq'].includes(r.status);
+                  const hasTime = r.elapsed_ms !== null;
+                  const statusColor =
+                    r.status === 'dns' ? 'bg-orange-100 text-orange-700' :
+                      r.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
+                        r.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
 
-                return (
-                  <tr key={r.entry_id} className={
-                    r.status === 'dsq' ? 'bg-red-50' :
-                    r.status === 'dns' ? 'bg-orange-50' :
-                    r.status === 'dnf' ? 'bg-yellow-50' :
-                    r.has_outlier_flag ? 'bg-yellow-50' : ''
-                  }>
-                    <td className="px-4 py-2.5 text-gray-400 font-medium">
-                      {isSpecialStatus ? '—' :
-                        r.elapsed_ms !== null ? i + 1 : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 font-bold">{r.bow_number}</td>
-                    <td className="px-4 py-2.5 text-gray-700">{r.team_name}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold">
-                      {isSpecialStatus ? '—' :
-                        r.elapsed_ms !== null ? formatElapsed(r.elapsed_ms) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-center text-gray-500">
-                      {r.timing_count}
-                      {r.has_outlier_flag && (
-                        <span className="ml-1 text-yellow-500" title="Outlier flag — check raw taps">⚠</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      {isSpecialStatus ? (
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
-                            {r.status?.toUpperCase()}
-                          </span>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, null)}
-                            className="text-gray-300 hover:text-gray-600 text-xs"
-                            title="Clear status"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dns')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                          >
-                            DNS
-                          </button>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dnf')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
-                          >
-                            DNF
-                          </button>
-                          <button
-                            onClick={() => handleSetEntryStatus(r.entry_id, 'dsq')}
-                            className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            DSQ
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={r.entry_id} className={
+                      r.status === 'dsq' ? 'bg-red-50' :
+                        r.status === 'dns' ? 'bg-orange-50' :
+                          r.status === 'dnf' ? 'bg-yellow-50' :
+                            r.has_outlier_flag ? 'bg-yellow-50' : ''
+                    }>
+                      <td className="px-4 py-2.5 text-gray-400 font-medium">
+                        {ranks[i] ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5 font-bold">{r.bow_number}</td>
+                      <td className="px-4 py-2.5 text-gray-700">
+                        <span className="flex items-center gap-1.5">
+                          <OarBlade oarspotterKey={r.oarspotter_key} size={18} />
+                          {r.team_name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold">
+                        {hasTime ? formatElapsed(r.elapsed_ms!) : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-center text-gray-500">
+                        {r.timing_count > 0 ? r.timing_count : ''}
+                        {r.has_outlier_flag && (
+                          <span className="ml-1 text-yellow-500" title="Outlier flag — check raw taps">⚠</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {isSpecialStatus ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
+                              {r.status?.toUpperCase()}
+                            </span>
+                            <button
+                              onClick={() => handleSetEntryStatus(r.entry_id, null)}
+                              className="text-gray-300 hover:text-gray-600 text-xs"
+                              title="Clear status"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleSetEntryStatus(r.entry_id, 'dns')}
+                              className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                            >
+                              DNS
+                            </button>
+                            <button
+                              onClick={() => handleSetEntryStatus(r.entry_id, 'dnf')}
+                              className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-yellow-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
+                            >
+                              DNF
+                            </button>
+                            <button
+                              onClick={() => handleSetEntryStatus(r.entry_id, 'dsq')}
+                              className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              DSQ
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         )}
