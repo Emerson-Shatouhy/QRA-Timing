@@ -165,3 +165,36 @@ export async function updateBoatStatus(entryId: bigint, status: BoatStatus): Pro
 
    return true;
 }
+
+/**
+ * Bulk-updates boat status for all entries in a race.
+ * Optionally filters to only update entries currently in a specific status.
+ * @param raceId - The ID of the race
+ * @param newStatus - The new status to set on matching entries
+ * @param fromStatus - If provided, only update entries currently in this status
+ * @returns True if successful, false otherwise
+ */
+export async function updateAllBoatStatusesForRace(
+   raceId: number,
+   newStatus: BoatStatus,
+   fromStatus?: BoatStatus
+): Promise<boolean> {
+   const supabase = createClient();
+   let query = supabase
+      .from('entries')
+      .update({ boat_status: newStatus })
+      .eq('race_id', raceId);
+
+   if (fromStatus) {
+      query = query.eq('boat_status', fromStatus);
+   }
+
+   const { error } = await query;
+
+   if (error) {
+      console.error('Error bulk-updating boat statuses:', error);
+      return false;
+   }
+
+   return true;
+}

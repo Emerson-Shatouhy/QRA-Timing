@@ -2,7 +2,7 @@
 import { getAllTeams, deleteTeam } from "../../utils/teams/getTeam";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "../../utils/supabase/client";
-import { Team, TeamDivision, TeamGender } from "../../utils/types/team";
+import { Team, TeamGender, TeamCategory, TEAM_CATEGORY_LABELS } from "../../utils/types/team";
 import CreateTeamModal from "./CreateTeamModal";
 import OarBlade from "./OarBlade";
 import {
@@ -15,26 +15,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const PAGE_SIZE = 15;
 
-type DivisionFilter = 'all' | TeamDivision;
 type GenderFilter = 'all' | TeamGender;
+type CategoryFilter = 'all' | TeamCategory;
 
-const DIVISION_LABELS: Record<string, string> = { D1: 'D1', D2: 'D2', D3: 'D3' };
 const GENDER_LABELS: Record<string, string> = { mens: "Men's", womens: "Women's", both: 'Both' };
-
-const divisionBadge = (d: TeamDivision | null) => {
-  if (!d) return null;
-  const colors: Record<TeamDivision, string> = {
-    D1: 'bg-blue-100 text-blue-800',
-    D2: 'bg-green-100 text-green-800',
-    D3: 'bg-purple-100 text-purple-800',
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[d]}`}>{d}</span>
-  );
-};
 
 const genderBadge = (g: TeamGender | null) => {
   if (!g) return null;
@@ -46,6 +34,19 @@ const genderBadge = (g: TeamGender | null) => {
   const labels: Record<TeamGender, string> = { mens: "Men's", womens: "Women's", both: 'Both' };
   return (
     <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[g]}`}>{labels[g]}</span>
+  );
+};
+
+const categoryBadge = (c: TeamCategory | null) => {
+  if (!c) return null;
+  const colors: Record<TeamCategory, string> = {
+    collegiate: 'bg-indigo-100 text-indigo-800',
+    youth: 'bg-amber-100 text-amber-800',
+    club: 'bg-teal-100 text-teal-800',
+    masters: 'bg-rose-100 text-rose-800',
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[c]}`}>{TEAM_CATEGORY_LABELS[c]}</span>
   );
 };
 
@@ -66,21 +67,18 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 export default function TeamsTable() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [divisionFilter, setDivisionFilter] = useState<DivisionFilter>('all');
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
 
   const fetchTeams = async () => {
     try {
       const teamsData = await getAllTeams();
-      // Sort: division order (D1 → D2 → D3 → null), then alphabetically
-      const divOrder: Record<string, number> = { D1: 0, D2: 1, D3: 2 };
-      const sorted = (teamsData || []).sort((a, b) => {
-        const da = divOrder[a.division ?? ''] ?? 3;
-        const db = divOrder[b.division ?? ''] ?? 3;
-        if (da !== db) return da - db;
-        return a.team_name.localeCompare(b.team_name);
-      });
+      // Sort alphabetically by team name
+      const sorted = (teamsData || []).sort((a, b) =>
+        a.team_name.localeCompare(b.team_name)
+      );
       setTeams(sorted);
     } catch (error) {
       console.error('Error fetching teams:', error);
@@ -101,8 +99,8 @@ export default function TeamsTable() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [divisionFilter, genderFilter]);
+  // Reset to page 1 whenever filters or search change
+  useEffect(() => { setPage(1); }, [genderFilter, categoryFilter, searchQuery]);
 
   const handleDeleteTeam = async (team: Team) => {
     if (!confirm(`Remove "${team.team_name}"? This cannot be undone.`)) return;
@@ -115,10 +113,16 @@ export default function TeamsTable() {
   };
 
   const filtered = useMemo(() => teams.filter(t => {
-    if (divisionFilter !== 'all' && t.division !== divisionFilter) return false;
     if (genderFilter !== 'all' && t.gender !== genderFilter) return false;
+    if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName = t.team_name.toLowerCase().includes(q);
+      const matchesShort = (t.team_short_name ?? '').toLowerCase().includes(q);
+      if (!matchesName && !matchesShort) return false;
+    }
     return true;
-  }), [teams, divisionFilter, genderFilter]);
+  }), [teams, genderFilter, categoryFilter, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -138,15 +142,25 @@ export default function TeamsTable() {
         <CreateTeamModal onTeamCreated={fetchTeams} />
       </div>
 
+      {/* Search */}
+      <div className="mb-4">
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search teams by name..."
+          className="max-w-sm"
+        />
+      </div>
+
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-4">
-        {/* Division pills */}
+        {/* Category pills */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Division</span>
+          <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Category</span>
           <div className="flex gap-1">
-            {(['all', 'D1', 'D2', 'D3'] as const).map(d => (
-              <FilterPill key={d} active={divisionFilter === d} onClick={() => setDivisionFilter(d)}>
-                {d === 'all' ? 'All' : DIVISION_LABELS[d]}
+            {(['all', 'collegiate', 'youth', 'club', 'masters'] as const).map(c => (
+              <FilterPill key={c} active={categoryFilter === c} onClick={() => setCategoryFilter(c)}>
+                {c === 'all' ? 'All' : TEAM_CATEGORY_LABELS[c]}
               </FilterPill>
             ))}
           </div>
@@ -172,7 +186,7 @@ export default function TeamsTable() {
           <TableRow>
             <TableHead>Team Name</TableHead>
             <TableHead>Short Name</TableHead>
-            <TableHead>Division</TableHead>
+            <TableHead>Category</TableHead>
             <TableHead>Gender</TableHead>
             <TableHead>Colors</TableHead>
             <TableHead>Actions</TableHead>
@@ -195,7 +209,7 @@ export default function TeamsTable() {
                   </div>
                 </TableCell>
                 <TableCell>{team.team_short_name || '—'}</TableCell>
-                <TableCell>{divisionBadge(team.division)}</TableCell>
+                <TableCell>{categoryBadge(team.category)}</TableCell>
                 <TableCell>{genderBadge(team.gender)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">

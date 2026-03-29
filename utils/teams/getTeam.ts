@@ -1,5 +1,5 @@
 import { createClient } from "../supabase/client";
-import { Team, TeamDivision, TeamGender } from "../types/team";
+import { Team, TeamDivision, TeamGender, TeamCategory } from "../types/team";
 
 /**
  * Creates a new team
@@ -10,6 +10,7 @@ import { Team, TeamDivision, TeamGender } from "../types/team";
  * @param division - Optional division (D1, D2, D3)
  * @param gender - Optional gender (mens, womens, both)
  * @param oarspotterKey - Optional OarSpotter image key (filename without .png)
+ * @param category - Optional category (collegiate, youth, club, masters)
  * @returns The created team or null if failed
  */
 export async function createTeam(
@@ -20,6 +21,7 @@ export async function createTeam(
   division?: TeamDivision,
   gender?: TeamGender,
   oarspotterKey?: string,
+  category?: TeamCategory,
 ): Promise<Team | null> {
   const supabase = createClient();
   const { data: team, error } = await supabase
@@ -32,6 +34,7 @@ export async function createTeam(
       division: division || null,
       gender: gender || null,
       oarspotter_key: oarspotterKey || null,
+      category: category || null,
     })
     .select()
     .single();
@@ -42,6 +45,49 @@ export async function createTeam(
   }
 
   return team;
+}
+
+/**
+ * Bulk-creates multiple teams in a single insert.
+ * Skips teams whose names already exist (uses onConflict to ignore duplicates).
+ * @param teams - Array of team data objects
+ * @returns Array of created teams (may be fewer than input if duplicates exist)
+ */
+export async function bulkCreateTeams(
+  teams: Array<{
+    team_name: string;
+    team_short_name?: string;
+    primary_color?: string;
+    secondary_color?: string;
+    division?: TeamDivision;
+    gender?: TeamGender;
+    oarspotter_key?: string;
+    category?: TeamCategory;
+  }>
+): Promise<Team[]> {
+  const supabase = createClient();
+  const rows = teams.map(t => ({
+    team_name: t.team_name,
+    team_short_name: t.team_short_name || null,
+    primary_color: t.primary_color || null,
+    secondary_color: t.secondary_color || null,
+    division: t.division || null,
+    gender: t.gender || null,
+    oarspotter_key: t.oarspotter_key || null,
+    category: t.category || null,
+  }));
+
+  const { data, error } = await supabase
+    .from('teams')
+    .insert(rows)
+    .select();
+
+  if (error) {
+    console.error('Error bulk-creating teams:', error);
+    return [];
+  }
+
+  return data || [];
 }
 
 /**

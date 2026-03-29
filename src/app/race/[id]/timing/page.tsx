@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import OarBlade from '@/components/OarBlade';
 import { RaceType, RaceStatus } from '../../../../../utils/types/race';
+import { BoatStatus } from '../../../../../utils/types/boat';
 import { RawTiming } from '../../../../../utils/types/rawTiming';
+import { updateAllBoatStatusesForRace } from '../../../../../utils/boats/getBoat';
 import {
   insertRawTiming,
   assignBowNumber,
@@ -234,11 +236,22 @@ export default function RaceTimingPage() {
 
   const handleStartRace = async () => {
     const startTime = new Date();
-    const { error } = await supabase
+    // Timer starts first — record actual_start before anything else
+    const { error: startErr } = await supabase
       .from('races')
-      .update({ actual_start: startTime.toISOString(), race_status: RaceStatus.STARTED })
+      .update({ actual_start: startTime.toISOString() })
       .eq('id', raceId);
-    if (error) alert('Failed to start race: ' + error.message);
+    if (startErr) { alert('Failed to start timer: ' + startErr.message); return; }
+
+    // Then update race status
+    const { error: statusErr } = await supabase
+      .from('races')
+      .update({ race_status: RaceStatus.STARTED })
+      .eq('id', raceId);
+    if (statusErr) console.error('Failed to update race status:', statusErr.message);
+
+    // Finally move all boats to on_water
+    await updateAllBoatStatusesForRace(raceId, BoatStatus.ON_WATER);
   };
 
   const handleFinishRace = async () => {
@@ -253,7 +266,7 @@ export default function RaceTimingPage() {
     const startTime = new Date();
     const { error } = await supabase
       .from('entries')
-      .update({ actual_start: startTime.toISOString() })
+      .update({ actual_start: startTime.toISOString(), boat_status: BoatStatus.ON_WATER })
       .eq('id', entryId);
     if (error) { alert('Failed to record start: ' + error.message); return; }
     if (!isStarted) {

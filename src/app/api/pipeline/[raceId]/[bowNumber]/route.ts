@@ -192,6 +192,16 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to write result' }, { status: 500 });
   }
 
+  // 9. Mark the entry's boat_status as finished now that it has a time
+  const { error: boatStatusErr } = await supabase
+    .from('entries')
+    .update({ boat_status: 'finished' })
+    .eq('id', entry.id);
+
+  if (boatStatusErr) {
+    console.error('Error updating boat status to finished:', boatStatusErr);
+  }
+
   return NextResponse.json({
     ok: true,
     bow_number: bowNum,

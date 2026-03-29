@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createTeam } from '../../utils/teams/getTeam';
-import { TeamDivision, TeamGender } from '../../utils/types/team';
+import { TeamDivision, TeamGender, TeamCategory, TEAM_CATEGORY_LABELS } from '../../utils/types/team';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
     secondary_color: '',
     division: '' as TeamDivision | '',
     gender: '' as TeamGender | '',
+    category: '' as TeamCategory | '',
     oarspotter_key: '',
   });
 
@@ -61,10 +62,11 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
         (formData.division || undefined) as TeamDivision | undefined,
         (formData.gender || undefined) as TeamGender | undefined,
         formData.oarspotter_key.trim() || undefined,
+        (formData.category || undefined) as TeamCategory | undefined,
       );
 
       if (result) {
-        setFormData({ team_name: '', team_short_name: '', primary_color: '', secondary_color: '', division: '', gender: '', oarspotter_key: '' });
+        setFormData({ team_name: '', team_short_name: '', primary_color: '', secondary_color: '', division: '', gender: '', category: '', oarspotter_key: '' });
         setOpen(false);
         onTeamCreated?.();
       } else {
@@ -111,6 +113,20 @@ export default function CreateTeamModal({ onTeamCreated }: CreateTeamModalProps)
               placeholder="e.g. WRC"
               maxLength={10}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={formData.category} onValueChange={(v) => handleInputChange('category', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(TEAM_CATEGORY_LABELS) as [TeamCategory, string][]).map(([val, label]) => (
+                  <SelectItem key={val} value={val}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

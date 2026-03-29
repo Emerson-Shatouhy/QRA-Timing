@@ -1,6 +1,6 @@
 'use client';
 
-const OARSPOTTER_BASE = 'https://www.oarspotter.com/blades/USA/Uni/';
+const OARSPOTTER_BASE = 'https://www.oarspotter.com/blades/USA/';
 
 interface OarBladeProps {
   /** The OarSpotter image key (filename without .png) */
@@ -18,7 +18,10 @@ export default function OarBlade({
 }: OarBladeProps) {
   if (!oarspotterKey) return null;
 
-  const src = `${OARSPOTTER_BASE}${oarspotterKey}.png`;
+  // Keys can include a directory prefix (e.g. "HS/BelmontHillSchool" or "Uni/Harvard").
+  // Legacy keys without a prefix default to the Uni directory.
+  const path = oarspotterKey.includes('/') ? oarspotterKey : `Uni/${oarspotterKey}`;
+  const src = `${OARSPOTTER_BASE}${path}.png`;
 
   // Crop to the right half of the image (the blade).
   // object-fit: cover keeps the natural aspect ratio,

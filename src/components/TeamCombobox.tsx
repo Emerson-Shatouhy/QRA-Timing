@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Team } from '../../utils/types/team';
+import { Team, TeamCategory, TEAM_CATEGORY_LABELS } from '../../utils/types/team';
 import { Input } from '@/components/ui/input';
 import OarBlade from './OarBlade';
 
@@ -19,6 +19,13 @@ const DIV_COLORS: Record<string, string> = {
   D1: 'bg-blue-100 text-blue-700',
   D2: 'bg-green-100 text-green-700',
   D3: 'bg-purple-100 text-purple-700',
+};
+
+const CAT_COLORS: Record<TeamCategory, string> = {
+  collegiate: 'bg-indigo-100 text-indigo-700',
+  youth: 'bg-amber-100 text-amber-700',
+  club: 'bg-teal-100 text-teal-700',
+  masters: 'bg-rose-100 text-rose-700',
 };
 
 /** Group label order */
@@ -195,6 +202,11 @@ export default function TeamCombobox({
                             {team.team_name}
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
+                            {team.category && (
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${CAT_COLORS[team.category]}`}>
+                                {TEAM_CATEGORY_LABELS[team.category]}
+                              </span>
+                            )}
                             {team.division && (
                               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${DIV_COLORS[team.division] ?? ''}`}>
                                 {team.division}

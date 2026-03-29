@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Race, RaceStatus } from '../../utils/types/race';
 import { updateRaceStatus } from '../../utils/races/getRace';
+import { updateAllBoatStatusesForRace } from '../../utils/boats/getBoat';
+import { BoatStatus } from '../../utils/types/boat';
 import { createClient } from '../../utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +39,7 @@ export default function RaceStatusControls({ race, raceId }: RaceStatusControlsP
       switch (pendingAction) {
         case 'mark-ready':
           await updateRaceStatus(raceIdNum, RaceStatus.READY);
+          await updateAllBoatStatusesForRace(Number(raceIdNum), BoatStatus.READY, BoatStatus.ENTERED);
           break;
         case 'mark-started':
           await updateRaceStatus(raceIdNum, RaceStatus.STARTED);
@@ -52,6 +55,7 @@ export default function RaceStatusControls({ race, raceId }: RaceStatusControlsP
           break;
         case 'revert-scheduled':
           await updateRaceStatus(raceIdNum, RaceStatus.SCHEDULED);
+          await updateAllBoatStatusesForRace(Number(raceIdNum), BoatStatus.ENTERED, BoatStatus.READY);
           break;
         case 'officialize':
           const supabase = createClient();
