@@ -13,6 +13,7 @@ import BulkDuplicateModal from '@/components/BulkDuplicateModal';
 import EditRegattaModal from '@/components/EditRegattaModal';
 import EditRaceModal from '@/components/EditRaceModal';
 import { Button } from '@/components/ui/button';
+import FileMakerRefreshButton from '@/components/FileMakerRefreshButton';
 import {
   ArrowLeft, Calendar, MapPin, Trophy, Users, ChevronRight,
   Play, CheckCircle, Copy, Save, Pencil, Trash2, MoreVertical, ClipboardList,
@@ -244,6 +245,7 @@ export default function RegattaDetailPage() {
                   <ClipboardList className="w-3.5 h-3.5" /> Schedule
                 </Button>
               </Link>
+              <FileMakerRefreshButton date={regatta.date} onSynced={refresh} />
 
               {/* Overflow menu for secondary actions */}
               <div className="relative">

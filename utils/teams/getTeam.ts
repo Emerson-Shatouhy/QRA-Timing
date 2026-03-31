@@ -91,6 +91,41 @@ export async function bulkCreateTeams(
 }
 
 /**
+ * Updates an existing team
+ * @param id - The ID of the team to update
+ * @param fields - An object of fields to update
+ * @returns The updated team or null if failed
+ */
+export async function updateTeam(
+  id: bigint,
+  fields: {
+    team_name?: string;
+    team_short_name?: string | null;
+    primary_color?: string | null;
+    secondary_color?: string | null;
+    division?: TeamDivision | null;
+    gender?: TeamGender | null;
+    oarspotter_key?: string | null;
+    category?: TeamCategory | null;
+  }
+): Promise<Team | null> {
+  const supabase = createClient();
+  const { data: team, error } = await supabase
+    .from('teams')
+    .update(fields)
+    .eq('id', Number(id))
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating team:', error);
+    return null;
+  }
+
+  return team;
+}
+
+/**
  * Deletes a team by ID
  * @param id - The ID of the team to delete
  * @returns True if successful, false otherwise

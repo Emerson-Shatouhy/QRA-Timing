@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "../../utils/supabase/client";
 import { Team, TeamGender, TeamCategory, TEAM_CATEGORY_LABELS } from "../../utils/types/team";
 import CreateTeamModal from "./CreateTeamModal";
+import EditTeamModal from "./EditTeamModal";
 import OarBlade from "./OarBlade";
 import {
   Table,
@@ -71,6 +72,8 @@ export default function TeamsTable() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const fetchTeams = async () => {
     try {
@@ -229,9 +232,14 @@ export default function TeamsTable() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Button variant="destructive" size="sm" onClick={() => handleDeleteTeam(team)}>
-                    Remove
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setEditingTeam(team); setEditModalOpen(true); }}>
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTeam(team)}>
+                      Remove
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))
@@ -275,6 +283,13 @@ export default function TeamsTable() {
           </div>
         </div>
       )}
+
+      <EditTeamModal
+        team={editingTeam}
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        onTeamUpdated={fetchTeams}
+      />
     </div>
   );
 }
