@@ -26,7 +26,7 @@ export default function AddEventModal({ regattaId, regattaDate, onCreated }: Pro
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [mode, setMode] = useState<'single' | 'levels'>('single');
+  const [mode, setMode] = useState<'single' | 'levels' | 'break'>('single');
   const [formData, setFormData] = useState({
     race_name: '',
     race_type: 'sprint',
@@ -61,7 +61,15 @@ export default function AddEventModal({ regattaId, regattaDate, onCreated }: Pro
     setLoading(true);
 
     try {
-      if (mode === 'levels') {
+      if (mode === 'break') {
+        await createRaceInRegatta(regattaId, {
+          race_name: formData.race_name || 'Break',
+          race_type: 'break',
+          event_date: regattaDate,
+          scheduled_start: formData.scheduled_start || undefined,
+          host_team_id: formData.host_team_id ? Number(formData.host_team_id) : undefined,
+        });
+      } else if (mode === 'levels') {
         const count = Number(formData.level_count) || 1;
         const promises = [];
         for (let i = 1; i <= count; i++) {
@@ -150,9 +158,55 @@ export default function AddEventModal({ regattaId, regattaDate, onCreated }: Pro
           >
             With Levels (1v, 2v, 3v...)
           </button>
+          <button
+            onClick={() => setMode('break')}
+            className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              mode === 'break' ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Break
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'break' ? (
+            <>
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-sm text-amber-800">
+                Add a break to the schedule. Breaks appear in the printed schedule but cannot be started or timed.
+              </div>
+              <div className="space-y-2">
+                <Label>Break Label</Label>
+                <Input
+                  value={formData.race_name}
+                  onChange={(e) => update('race_name', e.target.value)}
+                  placeholder="e.g. Lunch Break, Medal Ceremony"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Scheduled Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={formData.scheduled_start}
+                  onChange={(e) => update('scheduled_start', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Host School (optional)</Label>
+                <Select value={formData.host_team_id || 'none'} onValueChange={(v) => update('host_team_id', v === 'none' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select host school" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {teams.map((team) => (
+                      <SelectItem key={String(team.id)} value={String(team.id)}>
+                        {team.team_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Gender</Label>
@@ -298,11 +352,15 @@ export default function AddEventModal({ regattaId, regattaDate, onCreated }: Pro
               />
             </div>
           </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : mode === 'levels'
+              {loading ? 'Creating...' : mode === 'break'
+                ? 'Add Break'
+                : mode === 'levels'
                 ? `Create ${formData.level_count || 1} Events`
                 : 'Create Event'
               }

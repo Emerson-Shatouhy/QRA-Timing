@@ -10,6 +10,7 @@ export interface Regatta {
   status: RegattaStatus;
   description: string | null;
   weather_conditions: string | null;
+  host_organization: string | null;
 }
 
 export type EventGender = 'M' | 'F' | 'MX';

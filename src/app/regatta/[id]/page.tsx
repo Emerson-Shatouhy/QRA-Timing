@@ -7,6 +7,7 @@ import { getRegattaById, getRacesByRegatta, updateRegattaStatus, saveRegattaAsTe
 import { getEntryCountForRace, deleteRace } from '../../../../utils/races/getRace';
 import type { Regatta } from '../../../../utils/types/regatta';
 import type { Race } from '../../../../utils/types/race';
+import { isBreakEvent } from '../../../../utils/types/race';
 import AddEventModal from '@/components/AddEventModal';
 import BulkDuplicateModal from '@/components/BulkDuplicateModal';
 import EditRegattaModal from '@/components/EditRegattaModal';
@@ -14,7 +15,7 @@ import EditRaceModal from '@/components/EditRaceModal';
 import { Button } from '@/components/ui/button';
 import {
   ArrowLeft, Calendar, MapPin, Trophy, Users, ChevronRight,
-  Play, CheckCircle, Copy, Save, Pencil, Trash2, MoreVertical,
+  Play, CheckCircle, Copy, Save, Pencil, Trash2, MoreVertical, ClipboardList,
 } from 'lucide-react';
 
 type RaceWithEntryCount = Race & {
@@ -36,6 +37,7 @@ export default function RegattaDetailPage() {
   const [editingRace, setEditingRace] = useState<RaceWithEntryCount | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [deletingRaces, setDeletingRaces] = useState<Set<number>>(new Set());
+  const [showRegattaMenu, setShowRegattaMenu] = useState(false);
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
@@ -60,14 +62,14 @@ export default function RegattaDetailPage() {
     fetchData();
   }, [regattaId, refreshKey]);
 
-  // Close menu on click outside
+  // Close menus on click outside
   useEffect(() => {
-    const handleClick = () => setOpenMenuId(null);
-    if (openMenuId !== null) {
+    const handleClick = () => { setOpenMenuId(null); setShowRegattaMenu(false); };
+    if (openMenuId !== null || showRegattaMenu) {
       document.addEventListener('click', handleClick);
       return () => document.removeEventListener('click', handleClick);
     }
-  }, [openMenuId]);
+  }, [openMenuId, showRegattaMenu]);
 
   const handleStatusChange = async (newStatus: 'draft' | 'active' | 'complete') => {
     if (!regatta) return;
@@ -237,15 +239,45 @@ export default function RegattaDetailPage() {
                   <CheckCircle className="w-3.5 h-3.5" /> Complete
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => setShowEditRegatta(true)} className="gap-1.5">
-                <Pencil className="w-3.5 h-3.5" /> Edit
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleSaveTemplate} className="gap-1.5">
-                <Save className="w-3.5 h-3.5" /> Save Template
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleDeleteRegatta} className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50">
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </Button>
+              <Link href={`/regatta/${regattaId}/schedule`}>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <ClipboardList className="w-3.5 h-3.5" /> Schedule
+                </Button>
+              </Link>
+
+              {/* Overflow menu for secondary actions */}
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowRegattaMenu(!showRegattaMenu); }}
+                  className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  <MoreVertical className="w-4 h-4 text-gray-500" />
+                </button>
+
+                {showRegattaMenu && (
+                  <div className="absolute right-0 top-9 z-10 bg-white rounded-lg border border-gray-200 shadow-lg py-1 w-32">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowRegattaMenu(false); setShowEditRegatta(true); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowRegattaMenu(false); handleSaveTemplate(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Template
+                    </button>
+                    <div className="border-t border-gray-100 my-1" />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowRegattaMenu(false); handleDeleteRegatta(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -310,11 +342,79 @@ export default function RegattaDetailPage() {
         ) : (
           <div className="space-y-2">
             {races.map((race) => {
+              const isBreak = isBreakEvent(race);
               const rs = raceStatusConfig[race.race_status || 'scheduled'] || raceStatusConfig.scheduled;
               const isSelected = selectedRaces.has(Number(race.id));
               const isDeleting = deletingRaces.has(Number(race.id));
               const menuOpen = openMenuId === Number(race.id);
 
+              // Break block — non-clickable, visually distinct
+              if (isBreak) {
+                return (
+                  <div
+                    key={String(race.id)}
+                    className={`rounded-lg border border-dashed p-3 flex items-center gap-4 transition-all ${
+                      isDeleting ? 'opacity-50 pointer-events-none' :
+                      isSelected ? 'border-blue-300 bg-blue-50/30' : 'border-amber-300 bg-amber-50/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleRaceSelection(Number(race.id))}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                      <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 uppercase tracking-wide">
+                        Break
+                      </span>
+                      {race.scheduled_start && (
+                        <span className="text-xs text-amber-600 tabular-nums">
+                          {new Date(race.scheduled_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    {/* Menu for edit/delete only */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuId(menuOpen ? null : Number(race.id));
+                        }}
+                        className="p-1 rounded hover:bg-amber-100 transition-colors"
+                      >
+                        <MoreVertical className="w-4 h-4 text-amber-400" />
+                      </button>
+                      {menuOpen && (
+                        <div className="absolute right-0 top-8 z-10 bg-white rounded-lg border border-gray-200 shadow-lg py-1 w-36">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(null);
+                              setEditingRace(race);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(null);
+                              handleDeleteRace(Number(race.id));
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Normal race row
               return (
                 <div
                   key={String(race.id)}

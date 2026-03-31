@@ -162,8 +162,8 @@ export async function getRacesByRegatta(regattaId: number) {
     .from('races')
     .select('*, host_team:teams!host_team_id(id, team_name, team_short_name)')
     .eq('regatta_id', regattaId)
-    .order('sort_order', { ascending: true, nullsFirst: false })
-    .order('scheduled_start', { ascending: true });
+    .order('scheduled_start', { ascending: true, nullsFirst: false })
+    .order('sort_order', { ascending: true, nullsFirst: false });
 
   if (error) {
     console.error('Error fetching races for regatta:', error);
@@ -387,6 +387,53 @@ export async function createRegattaFromTemplate(templateId: number, regattaData:
   }
 
   return regatta;
+}
+
+/**
+ * Gets full schedule data for a regatta: races with entries and team names
+ */
+export async function getRegattaSchedule(regattaId: number) {
+  const supabase = createClient();
+
+  // Fetch races with host team info
+  const { data: races, error: racesError } = await supabase
+    .from('races')
+    .select('*, host_team:teams!host_team_id(id, team_name, team_short_name)')
+    .eq('regatta_id', regattaId)
+    .order('scheduled_start', { ascending: true, nullsFirst: false })
+    .order('sort_order', { ascending: true, nullsFirst: false });
+
+  if (racesError || !races) {
+    console.error('Error fetching schedule races:', racesError);
+    return [];
+  }
+
+  // Fetch entries for all races in one query, with team info
+  const raceIds = races.map(r => r.id);
+  if (raceIds.length === 0) return [];
+
+  const { data: entries, error: entriesError } = await supabase
+    .from('entries')
+    .select('id, race_id, bow_number, boat_status, team_id, level, teams(id, team_name, team_short_name)')
+    .in('race_id', raceIds)
+    .order('bow_number', { ascending: true });
+
+  if (entriesError) {
+    console.error('Error fetching schedule entries:', entriesError);
+  }
+
+  // Group entries by race_id
+  const entriesByRace: Record<number, typeof entries> = {};
+  for (const entry of entries || []) {
+    const rid = entry.race_id as number;
+    if (!entriesByRace[rid]) entriesByRace[rid] = [];
+    entriesByRace[rid].push(entry);
+  }
+
+  return races.map(race => ({
+    ...race,
+    entries: entriesByRace[race.id] || [],
+  }));
 }
 
 /**

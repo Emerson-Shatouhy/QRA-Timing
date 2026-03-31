@@ -13,7 +13,13 @@ export enum RaceStatus {
 export enum RaceType {
    TIME_TRIAL = 'time_trial',
    HEAD_RACE = 'head_race',
-   SPRINT = 'sprint'
+   SPRINT = 'sprint',
+   BREAK = 'break'
+}
+
+/** Returns true if the race is a schedule break (not an actual race) */
+export function isBreakEvent(race: { race_type?: RaceType | string | null }): boolean {
+  return race.race_type === RaceType.BREAK || race.race_type === 'break';
 }
 
 // Main Race type based on the table schema
