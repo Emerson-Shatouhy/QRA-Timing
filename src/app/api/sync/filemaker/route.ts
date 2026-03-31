@@ -29,6 +29,7 @@ interface SyncResult {
   races: number;
   teams: number;
   entries: number;
+  results: number;
   log: SyncLog[];
 }
 
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest) {
     races: 0,
     teams: 0,
     entries: 0,
+    results: 0,
     log,
   };
 
@@ -354,6 +356,13 @@ export async function POST(request: NextRequest) {
             }, log);
             if (entryCreated) result.entries++;
           }
+
+          // ── Sync race results (times) ─────────────────────────
+          const resultsSynced = await syncRaceResults(supabase, race.id, lane, log);
+          if (resultsSynced > 0) {
+            result.results += resultsSynced;
+            log.push({ message: `    Synced ${resultsSynced} result(s)`, type: 'success' });
+          }
         }
       }
     }
@@ -362,7 +371,7 @@ export async function POST(request: NextRequest) {
     result.success = true;
     log.push({ message: '\nSync completed successfully!', type: 'success' });
     log.push({
-      message: `Summary: ${result.regattas} regatta(s), ${result.races} race(s), ${result.teams} team(s), ${result.entries} new entries`,
+      message: `Summary: ${result.regattas} regatta(s), ${result.races} race(s), ${result.teams} team(s), ${result.entries} new entries, ${result.results} result(s)`,
       type: 'success',
     });
   } catch (err) {
@@ -664,6 +673,144 @@ async function upsertEntry(
   }
 
   return true;
+}
+
+// ─── Race Results ──────────────────────────────────────────────────────────
+
+/**
+ * Parses a FileMaker time string like "7:14.3" (= 7min 14.3sec) or "34.5" (= 34.5sec)
+ * into elapsed milliseconds.
+ */
+function parseRaceTime(fmTime: string): number | null {
+  if (!fmTime || fmTime.trim() === '') return null;
+  const t = fmTime.trim();
+
+  // Format: "M:SS.d" (minutes:seconds.tenths)
+  const minMatch = t.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+  if (minMatch) {
+    const mins = parseInt(minMatch[1], 10);
+    const secs = parseFloat(minMatch[2]);
+    return Math.round((mins * 60 + secs) * 1000);
+  }
+
+  // Format: "SS.d" (seconds only)
+  const secMatch = t.match(/^(\d+(?:\.\d+)?)$/);
+  if (secMatch) {
+    return Math.round(parseFloat(secMatch[1]) * 1000);
+  }
+
+  return null;
+}
+
+/**
+ * Syncs race results from a lane record into the race_results table.
+ * Requires entries to already exist so we can match entry_id.
+ */
+async function syncRaceResults(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  raceId: number,
+  lane: FMLaneRecord,
+  log: SyncLog[],
+): Promise<number> {
+  let synced = 0;
+  const fd = lane.fieldData;
+
+  // First, get all entries for this race to map bow_number → entry_id
+  const { data: entries } = await supabase
+    .from('entries')
+    .select('id, bow_number, team_id')
+    .eq('race_id', raceId);
+
+  if (!entries || entries.length === 0) return 0;
+
+  const entryByBow = new Map<number, { id: number; team_id: number }>();
+  for (const e of entries) {
+    entryByBow.set(e.bow_number, { id: e.id, team_id: e.team_id });
+  }
+
+  let hasAnyResult = false;
+  let winnerMs: number | null = null;
+
+  // Collect results and find the winner first
+  const laneResults: { bowNumber: number; elapsedMs: number }[] = [];
+  for (let i = 0; i <= 6; i++) {
+    const timeStr = fd[`time${i}` as keyof typeof fd] as string;
+    const elapsedMs = parseRaceTime(timeStr);
+    if (elapsedMs !== null && entryByBow.has(i)) {
+      laneResults.push({ bowNumber: i, elapsedMs });
+    }
+  }
+
+  // Sort to find winner
+  laneResults.sort((a, b) => a.elapsedMs - b.elapsedMs);
+  if (laneResults.length > 0) {
+    winnerMs = laneResults[0].elapsedMs;
+    hasAnyResult = true;
+  }
+
+  // Upsert each result
+  for (const { bowNumber, elapsedMs } of laneResults) {
+    const entry = entryByBow.get(bowNumber);
+    if (!entry) continue;
+
+    const marginMs = winnerMs !== null && elapsedMs !== winnerMs
+      ? elapsedMs - winnerMs
+      : null;
+
+    // Check if result already exists
+    const { data: existing } = await supabase
+      .from('race_results')
+      .select('id, elapsed_ms')
+      .eq('entry_id', entry.id)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      // Update if time changed
+      if (existing[0].elapsed_ms !== elapsedMs) {
+        await supabase
+          .from('race_results')
+          .update({
+            elapsed_ms: elapsedMs,
+            margin_ms: marginMs,
+            status: 'finished',
+            last_computed_at: new Date().toISOString(),
+          })
+          .eq('id', existing[0].id);
+        synced++;
+      }
+    } else {
+      // Create new result
+      const { error } = await supabase
+        .from('race_results')
+        .insert([{
+          entry_id: entry.id,
+          elapsed_ms: elapsedMs,
+          margin_ms: marginMs,
+          status: 'finished',
+          last_computed_at: new Date().toISOString(),
+        }]);
+
+      if (error) {
+        log.push({ message: `    Failed to create result for bow ${bowNumber}: ${error.message}`, type: 'error' });
+      } else {
+        synced++;
+      }
+    }
+  }
+
+  // Update race status to finished if we have results
+  if (hasAnyResult) {
+    await supabase
+      .from('races')
+      .update({
+        race_status: 'finished',
+        last_synced_at: new Date().toISOString(),
+      })
+      .eq('id', raceId);
+  }
+
+  return synced;
 }
 
 // ─── Display Helpers ────────────────────────────────────────────────────────

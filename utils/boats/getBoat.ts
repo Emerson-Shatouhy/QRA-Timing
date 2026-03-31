@@ -63,6 +63,7 @@ export async function getBoatsByRace(raceId: bigint) {
          teams (
             id,
             team_name,
+            team_short_name,
             oarspotter_key
          )
       `)
