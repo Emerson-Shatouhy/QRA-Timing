@@ -39,14 +39,15 @@ export async function updateSession(request: NextRequest) {
 
    if (
       !user &&
+      request.nextUrl.pathname !== '/' &&
       !request.nextUrl.pathname.startsWith('/login') &&
       !request.nextUrl.pathname.startsWith('/auth') &&
       !request.nextUrl.pathname.startsWith('/error') &&
       !request.nextUrl.pathname.startsWith('/spectator')
    ) {
-      // no user, potentially respond by redirecting the user to the login page
+      // no user, redirect to home page
       const url = request.nextUrl.clone()
-      url.pathname = '/login'
+      url.pathname = '/'
       return NextResponse.redirect(url)
    }
 
@@ -60,10 +61,11 @@ export async function updateSession(request: NextRequest) {
 
       const role = profile?.role
 
-      // Timer users can only access /timer, /login, /auth, /api routes
+      // Timer users can only access /timer, /login, /auth, /api, /spectator, and / routes
       if (role === 'timer') {
          const pathname = request.nextUrl.pathname
          const isAllowedPath =
+            pathname === '/' ||
             pathname.startsWith('/timer') ||
             pathname.startsWith('/login') ||
             pathname.startsWith('/auth') ||

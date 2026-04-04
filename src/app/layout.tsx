@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QRA Regatta Timing",
-  description: "Created by Emerson Shatouhy",
+  title: "QRA",
+  description: "Lake Quinsigamond Regatta Timing System. Created by Emerson Shatouhy",
 };
 
 export default function RootLayout({
@@ -31,7 +31,6 @@ export default function RootLayout({
       >
         <ProfileProvider>
           <NavBar />
-
           {children}
         </ProfileProvider>
       </body>

@@ -56,39 +56,41 @@ export default async function SpectatorDatePage({ params }: PageProps) {
   });
 
   return (
-    <div>
-      <Link
-        href="/spectator"
-        className="text-sm text-blue-600 hover:text-blue-800 mb-4 inline-flex items-center gap-1"
-      >
-        &larr; All Dates
-      </Link>
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <Link
+          href="/spectator"
+          className="text-sm text-slate-500 hover:text-slate-900 mb-4 inline-flex items-center gap-1 transition-colors"
+        >
+          &larr; All Dates
+        </Link>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">{displayDate}</h1>
-      <p className="text-gray-500 mb-6">
-        {races?.length || 0} race{(races?.length || 0) !== 1 ? "s" : ""} on
-        Lake Quinsigamond
-      </p>
+        <h1 className="text-2xl font-bold text-slate-900 mb-1">{displayDate}</h1>
+        <p className="text-slate-500 mb-6 text-sm">
+          {races?.length || 0} race{(races?.length || 0) !== 1 ? "s" : ""} on
+          Lake Quinsigamond
+        </p>
 
-      {error && (
-        <div className="bg-red-50 rounded-lg border border-red-200 p-4 mb-4 text-sm text-red-700">
-          <p className="font-medium">Query error:</p>
-          <p>{error.message}</p>
-        </div>
-      )}
+        {error && (
+          <div className="bg-red-50 rounded-lg border border-red-200 p-4 mb-6 text-sm text-red-700">
+            <p className="font-semibold">Query error:</p>
+            <p>{error.message}</p>
+          </div>
+        )}
 
-      {!races || races.length === 0 ? (
-        <div className="bg-white rounded-lg border p-8 text-center text-gray-500">
-          <p className="text-lg mb-1">No races found for this date</p>
-          <p className="text-sm">Results will appear here once races begin.</p>
-        </div>
-      ) : (
-        <SpectatorRaceGrid
-          races={races as any[]}
-          hostTeams={hostTeams}
-          date={date}
-        />
-      )}
+        {!races || races.length === 0 ? (
+          <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-500">
+            <p className="font-medium mb-1 text-slate-900">No races found for this date</p>
+            <p className="text-sm">Results will appear here once races begin.</p>
+          </div>
+        ) : (
+          <SpectatorRaceGrid
+            races={races as any[]}
+            hostTeams={hostTeams}
+            date={date}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -47,10 +47,8 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
       const bHost = b.host_team?.team_name || "";
       const hostCmp = aHost.localeCompare(bHost);
       if (hostCmp !== 0) return hostCmp;
-      // Within same host, sort by scheduled time
       return (a.scheduled_start || "").localeCompare(b.scheduled_start || "");
     }
-    // Default: sort by scheduled time
     return (a.scheduled_start || "").localeCompare(b.scheduled_start || "");
   });
 
@@ -72,41 +70,41 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
     <div>
       {/* Controls */}
       {hostTeams.length > 1 && (
-        <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 mb-5">
           {/* Sort toggle */}
-          <div className="flex items-center bg-white border rounded-lg overflow-hidden text-sm">
+          <div className="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden text-xs">
             <button
               onClick={() => setSortMode("time")}
-              className={`px-3 py-1.5 transition-colors ${
+              className={`px-3 py-1.5 transition-all font-medium flex items-center gap-1 ${
                 sortMode === "time"
-                  ? "bg-blue-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <Clock className="w-3.5 h-3.5 inline mr-1" />
+              <Clock className="w-3 h-3" />
               By Time
             </button>
             <button
               onClick={() => setSortMode("host")}
-              className={`px-3 py-1.5 transition-colors ${
+              className={`px-3 py-1.5 transition-all font-medium flex items-center gap-1 ${
                 sortMode === "host"
-                  ? "bg-blue-900 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <Filter className="w-3.5 h-3.5 inline mr-1" />
+              <Filter className="w-3 h-3" />
               By Host
             </button>
           </div>
 
           {/* Host filter chips */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setFilterHost(null)}
-              className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+              className={`text-xs px-3 py-1 rounded-full border font-medium transition-all ${
                 filterHost === null
-                  ? "bg-blue-900 text-white border-blue-900"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
               }`}
             >
               All
@@ -117,10 +115,10 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
                 onClick={() =>
                   setFilterHost(filterHost === ht.id ? null : ht.id)
                 }
-                className={`text-sm px-3 py-1 rounded-full border transition-colors ${
+                className={`text-xs px-3 py-1 rounded-full border font-medium transition-all ${
                   filterHost === ht.id
-                    ? "bg-blue-900 text-white border-blue-900"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
                 }`}
               >
                 {ht.name}
@@ -134,11 +132,11 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
       {groups.map((group) => (
         <div key={group.label || "all"}>
           {group.label && (
-            <h2 className="text-lg font-semibold text-gray-800 mb-3 mt-6 first:mt-0">
+            <h2 className="text-sm font-semibold text-slate-700 mb-2 mt-5 first:mt-0">
               {group.label}
             </h2>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {group.races.map((race) => (
               <RaceCard key={race.id} race={race} />
             ))}
@@ -147,8 +145,8 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
       ))}
 
       {sorted.length === 0 && (
-        <div className="bg-white rounded-lg border p-8 text-center text-gray-500">
-          <p>No races match the selected filter.</p>
+        <div className="bg-white rounded-lg border p-6 text-center text-slate-500 text-sm">
+          No races match the selected filter.
         </div>
       )}
     </div>
@@ -158,9 +156,6 @@ export default function SpectatorRaceGrid({ races, hostTeams, date }: Props) {
 // ─── RaceCard ──────────────────────────────────────────────────────────────
 
 function RaceCard({ race }: { race: RaceData }) {
-  const isActive = race.race_status === "started";
-  const isFinished = race.race_status === "finished";
-
   const scheduledTime = race.scheduled_start
     ? new Date(race.scheduled_start).toLocaleTimeString("en-US", {
         hour: "numeric",
@@ -175,37 +170,30 @@ function RaceCard({ race }: { race: RaceData }) {
   } as any;
 
   return (
-    <div
-      className={`bg-white rounded-lg border overflow-hidden ${
-        isActive ? "border-green-300 ring-1 ring-green-200" : ""
-      }`}
-    >
+    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden hover:border-slate-300 transition-colors">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <div className="flex items-center gap-3 min-w-0">
-          <StatusIcon status={race.race_status} />
-          <div className="min-w-0">
-            <div className="font-semibold text-gray-900 truncate">
-              {race.race_name}
-            </div>
-            <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
-              {scheduledTime && (
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {scheduledTime}
-                </span>
-              )}
-              {race.host_team && (
-                <span className="truncate">{race.host_team.team_name}</span>
-              )}
-            </div>
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium text-slate-900 text-sm truncate">
+            {race.race_name}
+          </div>
+          <div className="text-xs text-slate-500 flex items-center gap-2">
+            {scheduledTime && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {scheduledTime}
+              </span>
+            )}
+            {race.host_team && (
+              <span className="truncate">{race.host_team.team_name}</span>
+            )}
           </div>
         </div>
         <RaceStatusBadge status={race.race_status} />
       </div>
 
-      {/* Results — always visible, RaceResultsTable handles loading/empty states */}
-      <div className="p-4">
+      {/* Results */}
+      <div className="px-3 py-2">
         <RaceResultsTable race={raceForTable} compact />
       </div>
     </div>
@@ -214,42 +202,19 @@ function RaceCard({ race }: { race: RaceData }) {
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
-function StatusIcon({ status }: { status: string }) {
-  switch (status) {
-    case "started":
-      return (
-        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-          <Loader2 className="w-4 h-4 text-green-600 animate-spin" />
-        </div>
-      );
-    case "finished":
-      return (
-        <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-          <Trophy className="w-4 h-4 text-blue-600" />
-        </div>
-      );
-    default:
-      return (
-        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-          <Clock className="w-4 h-4 text-gray-400" />
-        </div>
-      );
-  }
-}
-
 function RaceStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    scheduled: "bg-gray-100 text-gray-600",
-    ready: "bg-yellow-100 text-yellow-700",
-    started: "bg-green-100 text-green-700",
-    finished: "bg-blue-100 text-blue-700",
-    cancelled: "bg-red-100 text-red-700",
-    abandoned: "bg-orange-100 text-orange-700",
+    scheduled: "text-slate-500",
+    ready: "text-amber-600",
+    started: "text-emerald-600",
+    finished: "text-blue-600",
+    cancelled: "text-red-500",
+    abandoned: "text-orange-500",
   };
 
   return (
     <span
-      className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+      className={`text-xs font-medium shrink-0 ml-2 ${
         styles[status] || styles.scheduled
       }`}
     >

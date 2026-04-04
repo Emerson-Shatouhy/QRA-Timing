@@ -187,12 +187,12 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
 
   if (loading) {
     if (compact) {
-      return <p className="text-sm text-gray-400 py-3">Loading...</p>;
+      return <p className="text-sm text-slate-400 py-3">Loading results...</p>;
     }
     return (
-      <div className="bg-white p-6 rounded-lg border shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Race Results</h2>
-        <p>Loading results...</p>
+      <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Race Results</h2>
+        <p className="text-slate-500">Loading results...</p>
       </div>
     );
   }
@@ -203,55 +203,60 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
     const sortedEntries = [...entries].sort((a, b) => (a.bow_number ?? 0) - (b.bow_number ?? 0));
 
     const laneContent = sortedEntries.length === 0 ? (
-      <p className="text-sm text-gray-400 py-3">No entries yet</p>
+      <p className="text-sm text-slate-400 py-3">No entries yet</p>
     ) : (
       <>
         {/* Desktop */}
         <div className="hidden md:block">
-          <Table>
-            {!compact && <TableCaption>Lane assignments for {race.race_name}</TableCaption>}
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Lane</TableHead>
-                <TableHead>Team</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.bow_number}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <OarBlade oarspotterKey={entry.teams?.oarspotter_key ?? null} size={20} />
-                      {(compact && entry.teams?.team_short_name) ? entry.teams.team_short_name : (entry.teams?.team_name || 'TBD')}
-                      {entry.level ? ` ${entry.level}` : ''}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <EntryStatusBadge status={entry.boat_status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-slate-50 to-slate-25 border-b border-slate-200">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-16">Lane</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Team</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedEntries.map((entry) => (
+                  <tr key={entry.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 font-semibold text-slate-700 text-sm">{entry.bow_number}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <OarBlade oarspotterKey={entry.teams?.oarspotter_key ?? null} size={18} />
+                        <span className="font-medium text-slate-900 text-sm truncate">
+                          {(compact && entry.teams?.team_short_name) ? entry.teams.team_short_name : (entry.teams?.team_name || 'TBD')}
+                          {entry.level ? ` ${entry.level}` : ''}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <EntryStatusBadge status={entry.boat_status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Mobile */}
         <div className="md:hidden space-y-2">
           {sortedEntries.map((entry) => (
-            <div key={entry.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-              <div className="flex items-center gap-3">
-                <span className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium text-gray-600">
+            <div key={entry.id} className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-700">
                   {entry.bow_number}
                 </span>
-                <OarBlade oarspotterKey={entry.teams?.oarspotter_key ?? null} size={18} />
-                <span className="font-medium text-sm">
+                <OarBlade oarspotterKey={entry.teams?.oarspotter_key ?? null} size={14} />
+                <span className="font-medium text-slate-900 text-xs truncate">
                   {(compact && entry.teams?.team_short_name) ? entry.teams.team_short_name : (entry.teams?.team_name || 'TBD')}
                   {entry.level ? ` ${entry.level}` : ''}
                 </span>
               </div>
-              <EntryStatusBadge status={entry.boat_status} />
+              <div className="flex-shrink-0 ml-2">
+                <EntryStatusBadge status={entry.boat_status} />
+              </div>
             </div>
           ))}
         </div>
@@ -262,8 +267,8 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
       return laneContent;
     }
     return (
-      <div className="bg-white p-4 md:p-6 rounded-lg border shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Lane Assignments</h2>
+      <div className="bg-white p-4 md:p-6 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <h2 className="text-lg font-semibold text-slate-900 mb-5">Lane Assignments</h2>
         {laneContent}
       </div>
     );
@@ -271,110 +276,129 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
 
   // ─── Results table ─────────────────────────────────────────────────────
 
+
   const tableContent = (
     <>
       {/* Desktop Table */}
       <div className="hidden md:block">
-        <Table>
-          {!compact && <TableCaption>Final results for {race.race_name}</TableCaption>}
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">Pos</TableHead>
-              <TableHead className="w-16">Bow</TableHead>
-              <TableHead>Team</TableHead>
-              <TableHead className="text-right">Time</TableHead>
-              <TableHead className="text-right w-28">Margin</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {results.map((result: any, index) => {
-              const statusLabel = result.status?.toUpperCase();
-              const statusColor =
-                result.status === 'dns' ? 'bg-orange-100 text-orange-700' :
-                result.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
-                result.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gradient-to-r from-slate-50 to-slate-25 border-b border-slate-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-16">Pos</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-16">Bow</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Team</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Time</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide w-28">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((result: any, index) => {
+                const statusLabel = result.status?.toUpperCase();
+                const isMedalPosition = index < 3 && !result.isSpecialStatus;
 
-              return (
-                <TableRow key={result.id.toString()} className={
-                  result.status === 'dsq' ? 'bg-red-50' :
-                  result.status === 'dnf' ? 'bg-yellow-50' :
-                  result.status === 'dns' ? 'bg-orange-50' : ''
-                }>
-                  <TableCell className="font-medium">
-                    {result.isSpecialStatus ? '—' : index + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {result.entries.bow_number}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
-                      <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={20} />
-                      {getTeamDisplayName(result)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-bold">
-                    {result.isSpecialStatus ? (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}`}>
-                        {statusLabel}
-                      </span>
-                    ) : result.raceTime != null ? (
-                      formatRaceTime(result.raceTime)
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm text-gray-500">
-                    {!result.isSpecialStatus && result.marginMs != null
-                      ? formatMargin(result.marginMs)
-                      : ''}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                return (
+                  <tr
+                    key={result.id.toString()}
+                    className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors"
+                  >
+                    <td className="px-4 py-4 text-center">
+                      {result.isSpecialStatus ? (
+                        <span className="text-slate-400 text-xs">—</span>
+                      ) : (
+                        <span className="text-base font-bold text-slate-700">
+                          {index + 1}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-4 font-semibold text-slate-700 text-sm">{result.entries.bow_number}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={18} />
+                        <span className="font-medium text-slate-900 text-sm truncate">{getTeamDisplayName(result)}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4 text-right">
+                      {result.isSpecialStatus ? (
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-lg inline-block
+                          ${result.status === 'dns' ? 'bg-orange-100 text-orange-800' :
+                            result.status === 'dnf' ? 'bg-yellow-100 text-yellow-800' :
+                            result.status === 'dsq' ? 'bg-red-100 text-red-800' : ''}
+                        `}>
+                          {statusLabel}
+                        </span>
+                      ) : result.raceTime != null ? (
+                        <span className="font-mono font-bold text-base text-slate-700">
+                          {formatRaceTime(result.raceTime)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-4 text-right">
+                      {!result.isSpecialStatus && result.marginMs != null ? (
+                        <span className="font-mono text-xs text-slate-500">{formatMargin(result.marginMs)}</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Mobile Card Layout */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden space-y-2.5">
         {results.map((result: any, index) => {
           const statusLabel = result.status?.toUpperCase();
-          const statusColor =
-            result.status === 'dns' ? 'bg-orange-100 text-orange-700' :
-            result.status === 'dnf' ? 'bg-yellow-100 text-yellow-700' :
-            result.status === 'dsq' ? 'bg-red-100 text-red-700' : '';
-          const cardBg =
-            result.status === 'dsq' ? 'bg-red-50 border-red-200' :
-            result.status === 'dnf' ? 'bg-yellow-50 border-yellow-200' :
-            result.status === 'dns' ? 'bg-orange-50 border-orange-200' : 'bg-gray-50';
+          const isMedalPosition = index < 3 && !result.isSpecialStatus;
 
           return (
-            <div key={result.id.toString()} className={`border rounded-lg p-4 ${cardBg}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                    result.isSpecialStatus ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-800'
+            <div
+              key={result.id.toString()}
+              className={`rounded-lg p-3 border transition-colors ${
+                result.status === 'dsq' ? 'bg-red-50 border-red-200 hover:bg-red-75 hover:border-red-300'
+                  : result.status === 'dnf' ? 'bg-yellow-50 border-yellow-200 hover:bg-yellow-75 hover:border-yellow-300'
+                  : result.status === 'dns' ? 'bg-orange-50 border-orange-200 hover:bg-orange-75 hover:border-orange-300'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
+              } hover:shadow-sm`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    result.isSpecialStatus
+                      ? 'bg-slate-200 text-slate-500'
+                      : 'bg-slate-100 text-slate-600'
                   }`}>
                     {result.isSpecialStatus ? '—' : index + 1}
                   </div>
-                  <div>
-                    <div className="font-medium flex items-center gap-1.5">
-                      <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={18} />
-                      {getTeamDisplayName(result)}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0 mb-0.5">
+                      <OarBlade oarspotterKey={result.entries?.teams?.oarspotter_key ?? null} size={14} />
+                      <span className="font-medium text-slate-900 truncate text-sm">{getTeamDisplayName(result)}</span>
                     </div>
-                    <div className="text-xs text-gray-500">Bow {result.entries.bow_number}</div>
+                    <div className="text-xs text-slate-500">Bow {result.entries.bow_number}</div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="flex-shrink-0 ml-2 text-right">
                   {result.isSpecialStatus ? (
-                    <span className={`text-sm font-semibold px-3 py-1 rounded-full ${statusColor}`}>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-lg inline-block
+                      ${result.status === 'dns' ? 'bg-orange-100 text-orange-800' :
+                        result.status === 'dnf' ? 'bg-yellow-100 text-yellow-800' :
+                        result.status === 'dsq' ? 'bg-red-100 text-red-800' : ''}
+                    `}>
                       {statusLabel}
                     </span>
                   ) : (
                     <>
-                      <div className="font-mono font-bold text-lg">
+                      <div className="font-mono font-bold text-sm text-slate-700">
                         {result.raceTime != null ? formatRaceTime(result.raceTime) : '—'}
                       </div>
                       {result.marginMs != null && (
-                        <div className="font-mono text-xs text-gray-500">
+                        <div className="font-mono text-xs text-slate-500">
                           {formatMargin(result.marginMs)}
                         </div>
                       )}
@@ -394,8 +418,8 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
   }
 
   return (
-    <div className="bg-white p-4 md:p-6 rounded-lg border shadow-sm">
-      <h2 className="text-lg font-semibold mb-4">Race Results</h2>
+    <div className="bg-white p-4 md:p-6 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+      <h2 className="text-lg font-semibold text-slate-900 mb-5">Race Results</h2>
       {tableContent}
     </div>
   );
@@ -405,10 +429,10 @@ export default function RaceResultsTable({ race, compact = false }: RaceResultsT
 
 function EntryStatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    entered: 'text-gray-400',
-    ready: 'text-yellow-600',
-    on_water: 'text-blue-600',
-    finished: 'text-green-600',
+    entered: 'bg-slate-100 text-slate-600',
+    ready: 'bg-amber-100 text-amber-700',
+    on_water: 'bg-blue-100 text-blue-700',
+    finished: 'bg-emerald-100 text-emerald-700',
   };
   const labels: Record<string, string> = {
     entered: 'Entered',
@@ -418,7 +442,7 @@ function EntryStatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span className={`text-xs font-medium ${styles[status] || 'text-gray-400'}`}>
+    <span className={`text-xs font-semibold px-2.5 py-1 rounded-md inline-block ${styles[status] || 'bg-slate-100 text-slate-600'}`}>
       {labels[status] || status}
     </span>
   );

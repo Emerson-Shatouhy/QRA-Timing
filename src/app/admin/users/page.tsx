@@ -5,7 +5,7 @@ import { RoleEditor } from './RoleEditor';
 import FileMakerSync from '@/components/FileMakerSync';
 
 export const metadata = {
-  title: 'Admin - QRA Timing',
+  title: 'Admin - QRA',
 };
 
 export default async function UsersPage() {
@@ -25,7 +25,7 @@ export default async function UsersPage() {
     .single();
 
   if (userProfile?.role !== 'admin') {
-    redirect('/');
+    redirect('/management');
   }
 
   // Fetch all profiles
