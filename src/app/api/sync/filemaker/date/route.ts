@@ -309,7 +309,7 @@ export async function POST(request: NextRequest) {
 
       let laneRecords;
       try {
-        laneRecords = await fetchLaneRecords(fmToken, String(lkSchdId));
+        laneRecords = await fetchLaneRecords(fmToken, String(lkSchdId), fmDate);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes('"401"') || msg.includes('No records match')) continue;
@@ -488,14 +488,18 @@ async function upsertRace(supabase: any, raceData: {
 async function upsertEntry(supabase: any, entryData: {
   teamId: number; raceId: number; bowNumber: number;
 }, log: SyncLog[]): Promise<boolean> {
+  // Dedup by bow_number + race_id — one team per lane position.
+  // If a team changed (FM updated the entry), update the team_id.
   const { data: existing } = await supabase
-    .from('entries').select('id')
-    .eq('team_id', entryData.teamId)
+    .from('entries').select('id, team_id')
+    .eq('bow_number', entryData.bowNumber)
     .eq('race_id', entryData.raceId)
     .limit(1);
 
   if (existing && existing.length > 0) {
-    await supabase.from('entries').update({ bow_number: entryData.bowNumber }).eq('id', existing[0].id);
+    if (existing[0].team_id !== entryData.teamId) {
+      await supabase.from('entries').update({ team_id: entryData.teamId }).eq('id', existing[0].id);
+    }
     return false;
   }
 

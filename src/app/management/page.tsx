@@ -1,4 +1,5 @@
 import { createClient } from '../../../utils/supabase/server';
+import { UserRole } from '../../../utils/types/profile';
 import Link from 'next/link';
 import {
   Trophy,
@@ -18,7 +19,7 @@ interface ActiveCard {
   icon: React.ComponentType<{ className?: string }>;
   iconBg: string;
   iconColor: string;
-  roles: ('admin' | 'timer')[];
+  roles: UserRole[];
 }
 
 interface PlaceholderCard {
@@ -33,25 +34,25 @@ const activeCards: ActiveCard[] = [
   {
     title: 'Regattas',
     description: 'Manage regattas, races, and event schedules',
-    href: '/regattas',
+    href: '/management/regattas',
     icon: Trophy,
     iconBg: 'bg-blue-100',
     iconColor: 'text-blue-600',
-    roles: ['admin'],
+    roles: ['admin', 'local_coach'],
   },
   {
     title: 'Teams',
     description: 'View and manage participating teams and entries',
-    href: '/teams',
+    href: '/management/teams',
     icon: Users,
     iconBg: 'bg-green-100',
     iconColor: 'text-green-600',
-    roles: ['admin'],
+    roles: ['admin', 'local_coach', 'other_coach'],
   },
   {
     title: 'Timing',
     description: 'Race timing interface for finish line officials',
-    href: '/timer',
+    href: '/management/timer',
     icon: Clock,
     iconBg: 'bg-orange-100',
     iconColor: 'text-orange-600',
@@ -60,16 +61,16 @@ const activeCards: ActiveCard[] = [
   {
     title: 'Results',
     description: 'Public spectator view of race results',
-    href: '/spectator',
+    href: '/',
     icon: Eye,
     iconBg: 'bg-purple-100',
     iconColor: 'text-purple-600',
-    roles: ['admin', 'timer'],
+    roles: ['admin', 'local_coach', 'other_coach', 'timer'],
   },
   {
     title: 'Admin',
     description: 'Manage users, roles, and permissions',
-    href: '/admin/users',
+    href: '/management/admin/users',
     icon: Settings,
     iconBg: 'bg-gray-100',
     iconColor: 'text-gray-600',
@@ -105,7 +106,7 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  let userRole: 'admin' | 'timer' | null = null;
+  let userRole: UserRole | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')

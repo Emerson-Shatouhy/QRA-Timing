@@ -37,15 +37,10 @@ export async function updateSession(request: NextRequest) {
       data: { user },
    } = await supabase.auth.getUser()
 
-   if (
-      !user &&
-      request.nextUrl.pathname !== '/' &&
-      !request.nextUrl.pathname.startsWith('/login') &&
-      !request.nextUrl.pathname.startsWith('/auth') &&
-      !request.nextUrl.pathname.startsWith('/error') &&
-      !request.nextUrl.pathname.startsWith('/spectator')
-   ) {
-      // no user, redirect to home page
+   const pathname = request.nextUrl.pathname
+
+   // Only /management/* routes require authentication
+   if (!user && pathname.startsWith('/management')) {
       const url = request.nextUrl.clone()
       url.pathname = '/'
       return NextResponse.redirect(url)
@@ -61,20 +56,29 @@ export async function updateSession(request: NextRequest) {
 
       const role = profile?.role
 
-      // Timer users can only access /timer, /login, /auth, /api, /spectator, and / routes
-      if (role === 'timer') {
-         const pathname = request.nextUrl.pathname
-         const isAllowedPath =
-            pathname === '/' ||
-            pathname.startsWith('/timer') ||
-            pathname.startsWith('/login') ||
-            pathname.startsWith('/auth') ||
-            pathname.startsWith('/api') ||
-            pathname.startsWith('/spectator')
+      const roleAllowedPaths: Record<string, string[]> = {
+         admin: [],
+         local_coach: ['/', '/management', '/management/regattas', '/management/regatta', '/management/race', '/management/teams', '/login', '/auth', '/api', '/management/profile'],
+         other_coach: ['/', '/management', '/management/teams', '/login', '/auth', '/api', '/management/profile'],
+         timer: ['/', '/management/timer', '/login', '/auth', '/api', '/management/profile'],
+      }
 
-         if (!isAllowedPath) {
+      if (role && role !== 'admin') {
+         const allowedPaths = roleAllowedPaths[role] || []
+         const isAllowedPath = allowedPaths.some(path =>
+            pathname === path || pathname.startsWith(path + '/')
+         )
+
+         // Also allow all public routes (anything not under /management)
+         const isPublicRoute = !pathname.startsWith('/management')
+
+         if (!isAllowedPath && !isPublicRoute) {
             const url = request.nextUrl.clone()
-            url.pathname = '/timer'
+            if (role === 'local_coach' || role === 'other_coach') {
+               url.pathname = '/management'
+            } else if (role === 'timer') {
+               url.pathname = '/management/timer'
+            }
             return NextResponse.redirect(url)
          }
       }

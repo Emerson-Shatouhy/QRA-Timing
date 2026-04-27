@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import UserDropdown from "@/components/UserDropdown";
-import { useProfile } from "@/contexts/ProfileContext";
 import { usePathname } from "next/navigation";
 
 function LiveDot() {
@@ -16,48 +13,21 @@ function LiveDot() {
   );
 }
 
-const PUBLIC_NAV_LINKS = [
-  { href: "/", label: "Home", exact: true },
-  // { href: "/live", label: "Live", dot: true },
-  { href: "/schedule", label: "Schedule" },
-  { href: "/results", label: "Results" },
-  { href: "/about", label: "About" },
+const NAV_LINKS = [
+  { href: "/spectator", label: "Home", exact: true },
+  { href: "/spectator/live", label: "Live", dot: true },
+  { href: "/spectator/schedule", label: "Schedule" },
+  { href: "/spectator/results", label: "Results" },
+  { href: "/spectator/about", label: "About" },
 ];
 
-export default function NavBar() {
-  const { profile, loading } = useProfile();
+export default function SpectatorNav() {
   const pathname = usePathname();
-
-  const isManagement = pathname?.startsWith("/management") || pathname === "/login";
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href;
     return pathname?.startsWith(href) ?? false;
   };
-
-  if (isManagement) {
-    return (
-      <nav className="bg-white border-b border-gray-200 px-6 py-3 shadow-sm">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/management" className="flex items-center gap-2">
-              <Image src="/qralogo.gif" alt="QRA Logo" width={36} height={36} />
-              <h1 className="text-lg font-bold text-gray-900">QRA Management</h1>
-            </Link>
-          </div>
-          <div className="flex items-center space-x-3">
-            {loading ? null : profile ? (
-              <UserDropdown />
-            ) : (
-              <Link href="/login">
-                <Button variant="outline" size="sm">Login</Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </nav>
-    );
-  }
 
   return (
     <header
@@ -83,7 +53,7 @@ export default function NavBar() {
         }}
       >
         <Link
-          href="/"
+          href="/spectator"
           style={{
             display: "flex",
             alignItems: "center",
@@ -105,7 +75,7 @@ export default function NavBar() {
         </Link>
 
         <nav style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          {PUBLIC_NAV_LINKS.map((link) => {
+          {NAV_LINKS.map((link) => {
             const active = isActive(link.href, link.exact);
             return (
               <Link
@@ -132,26 +102,22 @@ export default function NavBar() {
             );
           })}
           <span style={{ width: 12 }} />
-          {loading ? null : profile ? (
-            <UserDropdown />
-          ) : (
-            <Link
-              href="/login"
-              style={{
-                background: "#0e0e0f",
-                color: "#fff",
-                padding: "7px 15px",
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: "-0.005em",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Officials login
-            </Link>
-          )}
+          <Link
+            href="/login"
+            style={{
+              background: "#0e0e0f",
+              color: "#fff",
+              padding: "7px 15px",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "-0.005em",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Officials login
+          </Link>
         </nav>
       </div>
     </header>

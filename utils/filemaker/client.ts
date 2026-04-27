@@ -162,11 +162,14 @@ export async function fetchScheduleRecords(
 }
 
 /**
- * Fetches lane/race records for a given schedule block.
+ * Fetches lane/race records for a given schedule block and date.
+ * The date filter (MM/DD/YYYY) is required because FM reuses lk_schd_id
+ * across multiple years for the same recurring annual event.
  */
 export async function fetchLaneRecords(
   token: string,
   lkSchdId: string,
+  dateStr: string,
 ): Promise<FMLaneRecord[]> {
   const res = await fetch(
     `${FM_BASE}/layouts/web_lk_lanes/_find`,
@@ -177,7 +180,7 @@ export async function fetchLaneRecords(
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        query: [{ lk_schd_id: lkSchdId }],
+        query: [{ lk_schd_id: lkSchdId, racedate: dateStr }],
       }),
     },
   );

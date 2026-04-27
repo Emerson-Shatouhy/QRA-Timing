@@ -19,4 +19,5 @@ export interface Team {
    gender: TeamGender | null;
    category: TeamCategory | null;
    oarspotter_key: string | null;
+   is_local_school: boolean;
 }

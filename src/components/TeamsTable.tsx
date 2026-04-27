@@ -6,6 +6,7 @@ import { Team, TeamGender, TeamCategory, TEAM_CATEGORY_LABELS } from "../../util
 import CreateTeamModal from "./CreateTeamModal";
 import EditTeamModal from "./EditTeamModal";
 import OarBlade from "./OarBlade";
+import { useProfile } from "@/contexts/ProfileContext";
 import {
   Table,
   TableBody,
@@ -66,6 +67,7 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 }
 
 export default function TeamsTable() {
+  const { profile, role } = useProfile();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('all');
@@ -142,7 +144,7 @@ export default function TeamsTable() {
             {filtered.length} of {teams.length}
           </span>
         </h3>
-        <CreateTeamModal onTeamCreated={fetchTeams} />
+        {role === 'admin' && <CreateTeamModal onTeamCreated={fetchTeams} />}
       </div>
 
       {/* Search */}
@@ -209,6 +211,9 @@ export default function TeamsTable() {
                   <div className="flex items-center gap-2">
                     <OarBlade oarspotterKey={team.oarspotter_key} size={22} />
                     {team.team_name}
+                    {team.is_local_school && (
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Local</span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>{team.team_short_name || '—'}</TableCell>
@@ -233,12 +238,21 @@ export default function TeamsTable() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => { setEditingTeam(team); setEditModalOpen(true); }}>
-                      Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDeleteTeam(team)}>
-                      Remove
-                    </Button>
+                    {role === 'admin' && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => { setEditingTeam(team); setEditModalOpen(true); }}>
+                          Edit
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteTeam(team)}>
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                    {(role === 'local_coach' || role === 'other_coach') && team.id.toString() === profile?.team_id?.toString() && (
+                      <Button variant="outline" size="sm" onClick={() => { setEditingTeam(team); setEditModalOpen(true); }}>
+                        Edit
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "QRA",
-  description: "Lake Quinsigamond Regatta Timing System. Created by Emerson Shatouhy",
+  title: "QRA · Quinsigamond Rowing Association",
+  description: "Live race results, schedule, and information for the Quinsigamond Rowing Association — Lake Quinsigamond, Worcester MA",
 };
 
 export default function RootLayout({

@@ -196,7 +196,7 @@ export default function AddEventModal({ regattaId, regattaDate, onCreated }: Pro
                   <SelectTrigger><SelectValue placeholder="Select host school" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {teams.map((team) => (
+                    {teams.filter((t) => t.is_local_school).map((team) => (
                       <SelectItem key={String(team.id)} value={String(team.id)}>
                         {team.team_name}
                       </SelectItem>

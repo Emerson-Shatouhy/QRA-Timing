@@ -7,6 +7,7 @@ import { Profile } from '../../utils/types/profile';
 interface ProfileContextValue {
   profile: Profile | null;
   role: Profile['role'] | null;
+  teamId: number | null;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -14,6 +15,7 @@ interface ProfileContextValue {
 const ProfileContext = createContext<ProfileContextValue>({
   profile: null,
   role: null,
+  teamId: null,
   loading: true,
   refresh: async () => {},
 });
@@ -54,7 +56,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <ProfileContext.Provider value={{ profile, role: profile?.role ?? null, loading, refresh: fetchProfile }}>
+    <ProfileContext.Provider value={{ profile, role: profile?.role ?? null, teamId: profile?.team_id ?? null, loading, refresh: fetchProfile }}>
       {children}
     </ProfileContext.Provider>
   );

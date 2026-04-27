@@ -85,7 +85,7 @@ export default function RacesTable({ refreshTrigger }: RacesTableProps) {
             <TableRow key={race.id.toString()}>
               <TableCell className="font-medium">
                 <Link 
-                  href={`/race/${race.id}`}
+                  href={`/management/race/${race.id}`}
                   className="text-blue-600 hover:text-blue-800 hover:underline"
                 >
                   {race.race_name || 'Unnamed Race'}
